@@ -1,6 +1,6 @@
 # Sky2 Team - Rapid Prototyping Division
 
-Bekhruz Malikov, Nathan Zhao, Jonah Nazarian, Anirudh Srikrishna, Honglong Chen, James Chubbuck, Kavin Shrimali, Jason Alonso
+Bekhruz Malikov (Lead), Nathan Zhao, Jonah Nazarian, Anirudh Srikrishna, Honglong Chen, James Chubbuck, Kavin Shrimali, Jason Alonso
 
 SkyRunners
 Overview

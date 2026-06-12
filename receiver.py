@@ -1,3 +1,4 @@
+import time
 from time import sleep
 from imu import MPU6050
 from machine import Pin, PWM, UART, ADC, I2C
@@ -22,19 +23,19 @@ POWER = 0
 # Internal state variables (must persist between loop calls)
 angle_pitch = 0.0
 angle_roll = 0.0
-# For Yaw, we usually only use the Gyro because gravity doesn't help us find North
 angle_yaw = 0.0
 
 x1 = 0
 y1 = 0
 x2 = 0
 y2 = 0
+t = 0
 
 # PID State
 prev_error = [0, 0, 0]  # Pitch, Roll, Yaw
 integral = [0, 0, 0]
 
-dt = 0.5
+dt = 0.03
 
 def serial(message):
     uart.write(message.encode('ascii') + b"\r\n") # send message to serial
@@ -65,7 +66,65 @@ def setup(): # sets up LoRa module
     sleep(9)
     print("motor setup complete")
     
+def pid():
+    global angle_pitch, angle_roll, angle_yaw, x1, x2, y1, y2, t, dt
+    # PID Constants (These require manual tuning)
+    # Pitch/Roll usually share gains; Yaw is usually different
+    Kp, Ki, Kd = 0.5, 0.00, 0.00
+    Kp_y, Ki_y, Kd_y = 0.0, 0.0, 0.0
+
+    # --- 1. SENSOR FUSION (Estimate current state) ---
+    # Calculate pitch and roll from accelerometer (g)
+    # Pitch: Rotation around Y axis. Roll: Rotation around X axis.
+    accel_pitch = math.degrees(math.atan2(imu.accel.x, math.sqrt(imu.accel.y**2 + imu.accel.z**2)))
+    accel_roll = math.degrees(math.atan2(imu.accel.y, imu.accel.z))
+
+    # Complementary Filter: 98% Gyro (deg/s), 2% Accel
+    # This filters out vibration noise and prevents long-term drift
+    angle_pitch = 0.98 * (angle_pitch - imu.gyro.y * dt) + 0.02 * accel_pitch
+    angle_roll = 0.98 * (angle_roll + imu.gyro.x * dt) + 0.02 * accel_roll
+    angle_yaw += imu.gyro.z * dt # Pure integration for yaw (will drift without a magnetometer)
+
+    current_angles = [angle_pitch, angle_roll, angle_yaw]
+    dt = min((time.ticks_us() - t) / 1000000, 0.03)
+    t = time.ticks_us()
+    targets = [y2, x2, x1]
+    corrections = [0, 0, 0]
+
+    # --- 2. PID CALCULATION (Generate corrections) ---
+    for i in range(3):
+        error = targets[i] - current_angles[i]
+        
+        # Proportional
+        P = (Kp_y if i == 2 else Kp) * error
+        
+        # Integral (with basic clamping to prevent 'windup')
+        integral[i] = max(-10, min(10, integral[i] + error * dt))
+        I = (Ki_y if i == 2 else Ki) * integral[i]
+        
+        # Derivative (Rate of change)
+        D = (Kd_y if i == 2 else Kd) * (error - prev_error[i]) / dt
+        
+        corrections[i] = P
+        prev_error[i] = error
+    motor1.duty_u16(round(15000 + min(10000, max(0, (y1 + corrections[0] + corrections[1]) * 100)))); # motor 1 speed
+    motor2.duty_u16(round(15000 + min(10000, max(0, (y1 - corrections[0] + corrections[1]) * 100)))); # motor 2 speed
+    motor3.duty_u16(round(15000 + min(10000, max(0, (y1 - corrections[0] - corrections[1]) * 100)))); # motor 3 speed
+    motor4.duty_u16(round(15000 + min(10000, max(0, (y1 + corrections[0] - corrections[1]) * 100)))); # motor 4 speed
+    print(y1 + corrections[0] + corrections[1], y1 - corrections[0] + corrections[1], y1 - corrections[0] - corrections[1], y1 + corrections[0] - corrections[1])
+    '''Sets all motor speeds using conventional drone RC controls
+    y1 = throttle, x1 = yaw, y2 = pitch, x2 = roll
+    High y1/throttle = all four motors high
+    High x1 = right/CW yaw = CCW motors (2 and 4) high
+    High y2 = forward pitch = back motors (2 and 3) high
+    High x2 = right roll = left motors (1 and 2) high
+    Each individual control (throttle, yaw, pitch, or roll) can drive motors to full or no power
+    min(65535, max(0, motor speed)) keeps motor speed between 0 and 65535
+    Otherwise, it may overflow with multiple simultaneous controls
+    Numerical constant in each output "centers" motor to half speed with no joystick input'''
+
 def receive():
+    global x1, y1, x2, y2
     if uart.any():
         data = uart.read().decode('utf-8', 'ignore').strip()
         if "+RCV" in data: # data received from serial
@@ -74,71 +133,18 @@ def receive():
             y1 = int(joystick[2:4])
             x2 = int(joystick[4:6]) / 5.0 - 10.0
             y2 = int(joystick[6:]) / 5.0 - 10.0
-        
-        # PID Constants (These require manual tuning)
-        # Pitch/Roll usually share gains; Yaw is usually different
-        Kp, Ki, Kd = 1.0, 0.01, 0.05
-        Kp_y, Ki_y, Kd_y = 2.0, 0.01, 0.1
-        global angle_pitch, angle_roll, angle_yaw
+            led.high() # blink indicator LED
+            sleep(0.001)
+            led.low()
 
-        # --- 1. SENSOR FUSION (Estimate current state) ---
-        # Calculate pitch and roll from accelerometer (g)
-        # Pitch: Rotation around Y axis. Roll: Rotation around X axis.
-        accel_pitch = math.degrees(math.atan2(imu.accel.x, math.sqrt(imu.accel.y**2 + imu.accel.z**2)))
-        accel_roll = math.degrees(math.atan2(imu.accel.y, imu.accel.z))
-
-        # Complementary Filter: 98% Gyro (deg/s), 2% Accel
-        # This filters out vibration noise and prevents long-term drift
-        angle_pitch = 0.98 * (angle_pitch + imu.gyro.x * dt) + 0.02 * accel_pitch
-        angle_roll = 0.98 * (angle_roll + imu.gyro.y * dt) + 0.02 * accel_roll
-        angle_yaw += imu.gyro.z * dt # Pure integration for yaw (will drift without a magnetometer)
-
-        current_angles = [angle_pitch, angle_roll, angle_yaw]
-        targets = [y2, x2, x1]
-        corrections = [0, 0, 0]
-
-        # --- 2. PID CALCULATION (Generate corrections) ---
-        for i in range(3):
-            error = targets[i] - current_angles[i]
-            
-            # Proportional
-            P = (Kp_y if i == 2 else Kp) * error
-            
-            # Integral (with basic clamping to prevent 'windup')
-            integral[i] = max(-10, min(10, integral[i] + error * dt))
-            I = (Ki_y if i == 2 else Ki) * integral[i]
-            
-            # Derivative (Rate of change)
-            D = (Kd_y if i == 2 else Kd) * (error - prev_error[i]) / dt
-            
-            corrections[i] = P + I + D
-            prev_error[i] = error
-        motor1.duty_u16(round(15000 + min(10000, max(0, (y1 - corrections[2] - corrections[0] + corrections[1]) * 100)))); # motor 1 speed
-        motor2.duty_u16(round(15000 + min(10000, max(0, (y1 + corrections[2] + corrections[0] + corrections[1]) * 100)))); # motor 2 speed
-        motor3.duty_u16(round(15000 + min(10000, max(0, (y1 - corrections[2] + corrections[0] - corrections[1]) * 100)))); # motor 3 speed
-        motor4.duty_u16(round(15000 + min(10000, max(0, (y1 + corrections[2] - corrections[0] - corrections[1]) * 100)))); # motor 4 speed
-        print(y1 - corrections[2] - corrections[0] + corrections[1], y1 + corrections[2] + corrections[0] + corrections[1], y1 - corrections[2] + corrections[0] - corrections[1], y1 + corrections[2] - corrections[0] - corrections[1])
-        '''Sets all motor speeds using conventional drone RC controls
-        y1 = throttle, x1 = yaw, y2 = pitch, x2 = roll
-        High y1/throttle = all four motors high
-        High x1 = right/CW yaw = CCW motors (2 and 4) high
-        High y2 = forward pitch = back motors (2 and 3) high
-        High x2 = right roll = left motors (1 and 2) high
-        Each individual control (throttle, yaw, pitch, or roll) can drive motors to full or no power
-        min(65535, max(0, motor speed)) keeps motor speed between 0 and 65535
-        Otherwise, it may overflow with multiple simultaneous controls
-        Numerical constant in each output "centers" motor to half speed with no joystick input'''
-        led.high() # blink indicator LED
-        sleep(0.005)
-        led.low()
 
 power_count = 0
 while power.read_u16() < POWER:
     sleep(0.01)
 setup()
-while power_count < 300:
+while power_count < 300 and abs(angle_pitch) < 45 and abs(angle_roll) < 45:
     receive()
-    sleep(0.01)
+    pid()
     if power.read_u16() < POWER:
         power_count += 1
     else:
@@ -147,3 +153,4 @@ motor1.duty_u16(0)
 motor2.duty_u16(0)
 motor3.duty_u16(0)
 motor4.duty_u16(0)
+
