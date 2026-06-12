@@ -18,4 +18,4 @@ while True:
             data = nrf.recv().decode('utf-8', 'ignore').strip()
         print(data)
         led.value(1)
-        sleep(0.01)
+        sleep(0.01) 

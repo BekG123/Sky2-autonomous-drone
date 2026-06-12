@@ -1,0 +1,178 @@
+% Pico upload guide for VS Code with MicroPico, mpremote and RT-Thread MicroPython
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\title{ \textbf{Thonny to VSCode Setup:} \\ Pico W Upload Guide}
+\author{Bekhruz Malikov \& The Sky2 Team \\
+Stanford University}
+\date{May 2026}
+\begin{document}
+\maketitle
+\section*{Overview}
+This document summarizes the workflow used to upload MicroPython code to a Raspberry Pi Pico W from Visual Studio Code. It covers three approaches, ordered by recommendation:
+\begin{enumerate}
+  \item using the \textbf{MicroPico} extension in VS Code (recommended primary method),
+  \item using the RT-Thread MicroPython extension in VS Code (reliable alternative),
+  \item using the \texttt{mpremote} CLI.
+\end{enumerate}
+The Pico was flashed with standard MicroPython firmware, and the board was connected to Windows via \texttt{COM12 but your port will be different}.
+
+\section{MicroPico Workflow (Recommended)}
+MicroPico is a VS Code extension built specifically for the Raspberry Pi Pico and Pico W. It provides a REPL, one-click file upload, and IntelliSense stubs for MicroPython libraries like \texttt{machine}, \texttt{network}, and \texttt{uasyncio}.
+
+\subsection{Flash MicroPython Firmware}
+\begin{enumerate}[leftmargin=*]
+  \item Download the latest Pico W UF2 firmware from:
+    \begin{center}
+      \url{https://micropython.org/download/RPI_PICO_W/}
+    \end{center}
+  \item Hold the \texttt{BOOTSEL} button on the Pico W and plug it into USB, then release the button.
+  \item A drive labelled \texttt{RPI-RP2} will appear. Drag and drop the \texttt{.uf2} file onto it.
+  \item The Pico will reboot automatically with MicroPython installed.
+\end{enumerate}
+
+\subsection{Install and Connect MicroPico}
+\begin{enumerate}[leftmargin=*]
+  \item Open VS Code and go to the Extensions panel (\texttt{Ctrl+Shift+X}).
+  \item Search for \textbf{MicroPico} and install it.
+  \item Open a project folder in VS Code (\textbf{required} — the status bar icons will not appear without an open workspace).
+  \item Connect the Pico W via USB.
+  \item Click \textbf{``Connect to Pico''} in the bottom status bar, or use:\\
+    \texttt{Ctrl+Shift+P} $\rightarrow$ \textit{MicroPico: Connect}
+  \item A REPL terminal will open at the bottom of VS Code automatically.
+\end{enumerate}
+
+\subsection{Uploading and Running Files}
+\begin{itemize}
+  \item \textbf{Upload a file:} Right-click the file in the Explorer panel $\rightarrow$ \textit{Upload file to Pico}.
+  \item \textbf{Run on device:} \texttt{Ctrl+Shift+P} $\rightarrow$ \textit{MicroPico: Run current file on Pico}.
+  \item \textbf{List files on Pico:} \texttt{Ctrl+Shift+P} $\rightarrow$ \textit{MicroPico: List all files on Pico}.
+\end{itemize}
+
+\subsection{Verify Connection via REPL}
+Use the REPL at the bottom to confirm MicroPython and library support:
+\begin{verbatim}
+>>> import sys
+>>> print(sys.platform)
+>>> import rp2
+>>> print("rp2 OK")
+\end{verbatim}
+
+\subsection{Important Notes}
+\begin{itemize}
+  \item If MicroPico cannot connect, ensure no other tool (Thonny, mpremote, RT-Thread) is holding the serial port.
+  \item The status bar icons will only appear when a folder is open in VS Code.
+\end{itemize}
+
+\section{RT-Thread MicroPython Workflow}
+\begin{enumerate}[leftmargin=*]
+  \item Install the RT-Thread MicroPython extension in VS Code.
+  \begin{center}
+        \includegraphics[width=1\linewidth]{RT_ThreadInstall.png}
+    \end{center}
+  \item Create a MicroPython project in VS Code:
+    \begin{itemize}
+      \item Do this by clicking the + icon as such:
+      \begin{center}
+        \includegraphics[width=1\linewidth]
+        {CreateProject.png}
+      \end{center}
+      \item choose the workspace folder you will put this RT-Thread directory into E.g \texttt{c:\textbackslash Users\textbackslash user}
+    \end{itemize}
+  \item Connect the Pico to the PC via USB, may need to do the .utf-Boot trick(ref here) if this doesn't work. 
+  \item Select the device port in the extension (\texttt{Mine was COM12} Pictures to be added below).
+  \item Open the target file, for example \texttt{test\_esc\_dshot.py}.
+  \item Use the board REPL (the \texttt{> > >} thing in Python terminal) to verify MicroPython and \texttt{any lib support such as rp2}:
+    \begin{verbatim}
+>>> import sys
+>>> print(sys.platform)
+>>> import rp2
+>>> print("rp2 OK")
+    \end{verbatim}
+  \item Note: if VS Code reports "no device connection currently", close the existing port (e.g. COM12) session or terminal. Reconnect the port again. 
+  \begin{itemize}
+      \item Below is an example of a succesfull connection. Hooray!
+      \begin{center} 
+        \includegraphics[width=1\linewidth]{PortConnected.png}
+      \end{center}
+  \end{itemize}
+\end{enumerate}
+
+\section{\textit{mpremote} Command-Line Workflow}
+\subsection{Install mpremote}
+Run this in PowerShell, not inside the Python REPL:
+\begin{verbatim}
+python -m pip install --user mpremote
+\end{verbatim}
+
+\subsection{Upload a specific file}
+Use the direct COM port name with \texttt{mpremote}:
+\begin{verbatim}
+python -m mpremote connect COM12 fs put "[file]"
+\end{verbatim}
+
+\subsection{List files on the Pico}
+To inspect the Pico filesystem, run:
+\begin{verbatim}
+python -m mpremote connect COM12 fs ls /
+\end{verbatim}
+
+\subsection{Run the uploaded script}
+Execute the file from the Pico filesystem:
+\begin{verbatim}
+python -m mpremote connect COM12 execfile [file]
+\end{verbatim}
+
+\subsection{Run without uploading}
+If you want to execute the local file directly on Pico without saving it permanently:
+\begin{verbatim}
+python -m mpremote connect COM12 run "[file]"
+\end{verbatim}
+
+\subsection{Useful mpremote shell commands}
+The following commands are useful for day-to-day Pico development with this project:
+\begin{itemize}
+  \item List available serial devices:
+    \begin{verbatim}
+python -m mpremote devs
+    \end{verbatim}
+  \item Open a Pico REPL on COM12:
+    \begin{verbatim}
+python -m mpremote connect COM12 repl
+    \end{verbatim}
+  \item Copy a file from Pico to PC:
+    \begin{verbatim}
+python -m mpremote connect COM12 fs get test_esc_dshot.py "[file]"
+    \end{verbatim}
+  \item Remove a file from the Pico filesystem:
+    \begin{verbatim}
+python -m mpremote connect COM12 fs rm "[file]"
+    \end{verbatim}
+  \item Perform a soft reset of the Pico:
+    \begin{verbatim}
+python -m mpremote connect COM12 soft-reset
+    \end{verbatim}
+\end{itemize}
+
+\section{Important Notes}
+\begin{itemize}
+  \item The command-line tool must use \texttt{python -m mpremote} if \texttt{mpremote} is not on the shell path.
+  \item Close any existing COM12 connection before using \texttt{mpremote}, otherwise the port will be busy.
+  \item The standard Python terminal in VS Code uses desktop Python and cannot import \texttt{rp2}. Only the Pico device terminal / REPL can run Pico MicroPython code.
+  \item The Pico firmware in this workflow was standard MicroPython, not RT-Thread MicroPython. The RT-Thread extension can still be used to manage the board, but \texttt{mpremote} works directly with the standard MicroPython firmware.
+  \item Only one tool can hold the serial port at a time. MicroPico, RT-Thread, and mpremote will conflict if used simultaneously.
+\end{itemize}
+
+\section{Summary}
+This guide documents three upload paths, in order of recommendation:
+\begin{itemize}
+  \item \textbf{MicroPico} (recommended): install the extension, open a workspace folder, connect via the status bar, and upload files with a right-click.
+  \item \textbf{RT-Thread}: use the RT-Thread extension in VS Code to create a project and connect to \texttt{COM12}.
+  \item \textbf{mpremote}: use \texttt{mpremote} from PowerShell to upload, list, and execute files on the Pico.
+\end{itemize}
+All methods require the Pico board to be connected on the correct serial port and not occupied by another tool.
+
+\end{document}
