@@ -1,7 +1,8 @@
 # Author: Bekhruz Malikov
 import rp2
+from rp2 import DMA
 import machine
-from machine import Pin
+from machine import Pin, mem32
 import time
 
 machine.freq(120_000_000) # downclock MCU by 5 MHz (125 MHz)
@@ -20,7 +21,7 @@ MOTOR_PINS = [6, 5, 4, 3] # GPIO on PicoW
     autopull=False, # don't grab data yet 
     set_init=rp2.PIO.OUT_LOW, # SET pin starts LOW
     out_init=rp2.PIO.OUT_LOW, # The OUTPUT pin starts LOW
-    sideset_init=rp2.PIO.OUT_LOW # Signal wire to ESC starts LOW
+    sideset_init=rp2.PIO.OUT_LOW  # Signal wire to ESC starts LOW
     )
 
 ############################
@@ -44,10 +45,11 @@ def dshot():
     jmp(not_y, "ZERO").side(1) 
 
     # jmp(not_y, "ZERO")
-    
     # label("ONE")
-
     nop().side(1) [2]
+
+    # nop() [3]
+
     # nop().side(1) [7]
     # nop().side(1) [7]
     # nop().side(1) [7]
@@ -61,11 +63,13 @@ def dshot():
     # nop().side(1) [7]
     
     jmp(x_dec, "BITLOOP").side(0) [1]
+    # jmp(x_dec, "BITLOOP").side(0) [0]
     jmp("DONE")
 
     label("ZERO")
-
     nop().side(0) [2]
+    # nop().side(0) [3]
+
     # nop().side(0) [7]
     # nop().side(0) [7]
     # nop().side(0) [7]
@@ -79,6 +83,8 @@ def dshot():
     # nop().side(0) [7]
     
     jmp(x_dec, "BITLOOP").side(0) [1]
+
+    # jmp(x_dec, "BITLOOP") [0]
     
     label("DONE")
     nop().side(0) [1]
@@ -94,46 +100,6 @@ def make_packet(throttle, telemetry=False):
     crc = ((packet ^ (packet >> 4) ^ (packet >> 8))) & 0x0F # unique fingerprint; 0x0F = 15 
     return (packet << 4) | crc # make room for crc bits 
 
-
-####################################
-### send_dshot() ###
-# sends the dshot packet to the ESC
-###################################
-
-def send_dshot(state_machine, throttle):
-    packet = make_packet(throttle)
-    state_machine.put(packet << 16) # shift 16 bits left from 32 to be read by sm
-
-#####################################
-### Initialize the state machine  ###
-#####################################
-
-# 8 cycles per bit @ 4.8 MHz = DShot600 (1.67 microseconds per bit)
-# 8 cycles per bit @ 2.4 MHz = DShot300 (3.33 microseconds per bit)
-DSHOT_FREQUENCY = 4_800_000 # cycles per second -> DSHOT 600
-# 306 Hz --> LED Debug frequency 
-state_machines = [
-    rp2.StateMachine(
-        0, # 0th state machine 
-        dshot, # the sequence of actions to run
-        freq=DSHOT_FREQUENCY, 
-        sideset_base=Pin(MOTOR_PINS[0])), 
-    rp2.StateMachine(
-        1, # 1st state machine
-        dshot,
-        freq=DSHOT_FREQUENCY,
-        sideset_base=Pin(MOTOR_PINS[1])), 
-    rp2.StateMachine(
-        2, # 1st state machine
-        dshot,
-        freq=DSHOT_FREQUENCY,
-        sideset_base=Pin(MOTOR_PINS[2])), 
-    rp2.StateMachine(
-        3, # 4th state machine
-        dshot,
-        freq=DSHOT_FREQUENCY,
-        sideset_base=Pin(MOTOR_PINS[3]))
-    ]
 
 ###
 # Ensuring timing of each PIO block is correct
@@ -161,57 +127,146 @@ state_machines = [
 #     return target_sm.irq(time_instructions)
 
 
+####
+# may need FGPA to handle the parallel latency bottleneck 
+####
+def send_dshot(throttle):
+
+    # physical addresses of state machines transmitter FIFOs on Pico Chip 
+    # Sequential 32-bit hardware slots inside the RP2040 chip
+    SM0_TXFIFO = 0x50200010  # Motor on SM0 (GPIO 6)
+    SM1_TXFIFO = 0x50200014  # Motor on SM1 (GPIO 5)
+    SM2_TXFIFO = 0x50200018  # Motor on SM2 (GPIO 4)
+    SM3_TXFIFO = 0x5020001c  # Motor on SM3 (GPIO 3)
+
+    # make the dshot packet and send it simultenously to selected motors 
+    packet = make_packet(throttle)
+    dshot_packet = packet << 16 # shift 16 bits left from 32 to be read by sm
+    mem32[SM0_TXFIFO] = dshot_packet 
+    # mem32[SM1_TXFIFO] = dshot_packet 
+    # mem32[SM2_TXFIFO] = dshot_packet 
+    mem32[SM3_TXFIFO] = dshot_packet
+
+################################################################
+### Continuous background stream
+### A 1 kHz timer keeps packets flowing to all 4 motors no
+### matter what the main loop is doing (printing, sleeping,
+### computing) — this avoids any gap that would let an ESC
+### drop out of "armed".
+################################################################
+
+def _dshot_ticker(timer):
+    send_dshot(dshot_throttle)
+
+def setup_dshot_sm():
+    #####################################
+    ### Initialize the state machine  ###
+    #####################################
+
+    # 8 cycles per bit @ 4.8 MHz = DShot600 (1.67 microseconds per bit)
+    # 8 cycles per bit @ 2.4 MHz = DShot300 (3.33 microseconds per bit)
+    DSHOT_FREQUENCY = 4_800_000 # cycles per second -> DSHOT 600
+    # 306 Hz --> LED Debug frequency 
+    state_machines = [
+        rp2.StateMachine(
+            0, # 0th state machine 
+            dshot, # the sequence of actions to run
+            freq=DSHOT_FREQUENCY, 
+            sideset_base=Pin(MOTOR_PINS[0])), 
+        rp2.StateMachine(
+            1, # 1st state machine
+            dshot,
+            freq=DSHOT_FREQUENCY,
+            sideset_base=Pin(MOTOR_PINS[1])), 
+        rp2.StateMachine(
+            2, # 1st state machine
+            dshot,
+            freq=DSHOT_FREQUENCY,
+            sideset_base=Pin(MOTOR_PINS[2])), 
+        rp2.StateMachine(
+            3, # 4th state machine
+            dshot,
+            freq=DSHOT_FREQUENCY,
+            sideset_base=Pin(MOTOR_PINS[3]))
+        ]
+    
+    for sm in state_machines:
+            sm.restart()
+   
 def main():
 
-    # for sm in state_machines:
-    # sm.active(1) # set state machine to running mode 
-    target_sm = state_machines[3]
-    target_sm.active(1)
+    global dshot_throttle
+    dshot_throttle = 0
+
+    ##### Initialize Timer ###
+    dshot_timer = machine.Timer()
+
+    setup_dshot_sm()
+    
+    # 1kHz dshot timer to synchronize each packet 
+    dshot_timer.init(freq=1000, 
+                     mode = machine.Timer.PERIODIC,
+                     callback=_dshot_ticker)
+
+    # activate all state machines at once 
+    machine.mem32[0x50200000] = 0b1111
 
     #####################################
     ### Arm the ESCs  ###
     # Uses the state machine, then dshot()  #
     # for sending pulses to ESC         #
     #####################################
-    # transmitting FIFO should 
-    # status_led = Pin(2, Pin.OUT)
 
     print("Arming ESC for 2 seconds")
     for _ in range(200):
-        send_dshot(target_sm, 0) # test for 200 milliseconds = 2 seconds 
+        dshot_throttle = 0 # test for 200 milliseconds = 2 seconds 
         time.sleep_ms(10) # 1s delay
 
     print("Armed: ")
-    
-    repeat_counter = 0
-    repeat_stop = 200
-    while (repeat_counter < repeat_stop):
-        
-        print("Sending 0% throttle: ")
-        send_dshot(target_sm, 0);
-        # time.sleep_ms(5000) # 5 second buffer 
-        time.sleep_ms(50) # 1 second buffer
 
-        print("Sending 50% throttle: ")
-        send_dshot(target_sm, 1024)
-        time.sleep_ms(50)
-
-        repeat_counter += 1
-    
-    time.sleep_ms(10000)
     print("------------------------------")
 
-    repeat_counter = 1
-    THROTTLE = 1500
-    STEP_SIZE = 1
-    while (repeat_counter < THROTTLE):
+    # for _ in range(200):
+    #     send_dshot(0) # test for 200 milliseconds = 2 seconds 
+    #     time.sleep_ms(10) # 1s delay
+
+    # repeat_counter = 0
+    # repeat_stop = 200
+    # while (repeat_counter < repeat_stop):
         
-        throttle_percent = (repeat_counter / 2047) * 100
+    #     print("Sending 0% throttle: ")
+    #     send_dshot(1000);
+    #     # time.sleep_ms(5000) # 5 second buffer 
+    #     time.sleep_ms(50) # 1 second buffer
+
+    #     repeat_counter += 1
+    
+    print("------------------------------")
+
+    # for _ in range(200):
+    #     send_dshot(0) # test for 200 milliseconds = 2 seconds 
+    #     time.sleep_ms(10) # 1s delay
+
+    repeat_counter = 48
+    MAX_THROTTLE = 600
+    STEP_SIZE = 1
+    while (repeat_counter < MAX_THROTTLE):
+        
+        throttle_percent = ((repeat_counter - 48) / (2047 - 48)) * 100
         print(f"Incrementing throttle: {throttle_percent} % ")
-        send_dshot(target_sm, repeat_counter)
+        # send_dshot(repeat_counter)
+        dshot_throttle = repeat_counter
         time.sleep_ms(50)
         
         repeat_counter += STEP_SIZE 
+
+    print("------------------------------")
+    # Bring them down safely
+    print("Ramp complete.")
+    # for _ in range(100):
+    #     send_dshot(0)
+    #     time.sleep_ms(10)
+
 
     # for _ in range(10000):  
     #     send_dshot(state_machine_0, 48) # test for 200 milliseconds = 2 seconds 
