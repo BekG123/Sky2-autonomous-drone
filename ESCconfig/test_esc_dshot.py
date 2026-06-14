@@ -138,13 +138,13 @@ def send_dshot(throttle):
     SM1_TXFIFO = 0x50200014  # Motor on SM1 (GPIO 5)
     SM2_TXFIFO = 0x50200018  # Motor on SM2 (GPIO 4)
     SM3_TXFIFO = 0x5020001c  # Motor on SM3 (GPIO 3)
-
+    
     # make the dshot packet and send it simultenously to selected motors 
     packet = make_packet(throttle)
     dshot_packet = packet << 16 # shift 16 bits left from 32 to be read by sm
     mem32[SM0_TXFIFO] = dshot_packet 
-    # mem32[SM1_TXFIFO] = dshot_packet 
-    # mem32[SM2_TXFIFO] = dshot_packet 
+    mem32[SM1_TXFIFO] = dshot_packet 
+    mem32[SM2_TXFIFO] = dshot_packet 
     mem32[SM3_TXFIFO] = dshot_packet
 
 ################################################################
@@ -203,7 +203,7 @@ def main():
 
     setup_dshot_sm()
     
-    # 1kHz dshot timer to synchronize each packet 
+    # initialize 1kHz dshot timer to synchronize each packet 
     dshot_timer.init(freq=1000, 
                      mode = machine.Timer.PERIODIC,
                      callback=_dshot_ticker)
@@ -218,54 +218,58 @@ def main():
     #####################################
 
     print("Arming ESC for 2 seconds")
-    for _ in range(200):
-        dshot_throttle = 0 # test for 200 milliseconds = 2 seconds 
-        time.sleep_ms(10) # 1s delay
+    try:
+        for _ in range(200):
+            dshot_throttle = 0 # test for 200 milliseconds = 2 seconds 
+            time.sleep_ms(10) # 1s delay
 
-    print("Armed: ")
+        print("Armed: ")
 
-    print("------------------------------")
+        print("------------------------------")
 
-    # for _ in range(200):
-    #     send_dshot(0) # test for 200 milliseconds = 2 seconds 
-    #     time.sleep_ms(10) # 1s delay
+        # for _ in range(200):
+        #     send_dshot(0) # test for 200 milliseconds = 2 seconds 
+        #     time.sleep_ms(10) # 1s delay
 
-    # repeat_counter = 0
-    # repeat_stop = 200
-    # while (repeat_counter < repeat_stop):
+        # repeat_counter = 0
+        # repeat_stop = 200
+        # while (repeat_counter < repeat_stop):
+            
+        #     print("Sending 0% throttle: ")
+        #     send_dshot(1000);
+        #     # time.sleep_ms(5000) # 5 second buffer 
+        #     time.sleep_ms(50) # 1 second buffer
+
+        #     repeat_counter += 1
         
-    #     print("Sending 0% throttle: ")
-    #     send_dshot(1000);
-    #     # time.sleep_ms(5000) # 5 second buffer 
-    #     time.sleep_ms(50) # 1 second buffer
+        print("------------------------------")
 
-    #     repeat_counter += 1
-    
-    print("------------------------------")
+        # for _ in range(200):
+        #     send_dshot(0) # test for 200 milliseconds = 2 seconds 
+        #     time.sleep_ms(10) # 1s delay
 
-    # for _ in range(200):
-    #     send_dshot(0) # test for 200 milliseconds = 2 seconds 
-    #     time.sleep_ms(10) # 1s delay
+        repeat_counter = 48
+        MAX_THROTTLE = 600
+        STEP_SIZE = 1
+        while (repeat_counter < MAX_THROTTLE):
+            
+            throttle_percent = ((repeat_counter - 48) / (2047 - 48)) * 100
+            print(f"Incrementing throttle: {throttle_percent} % ")
+            # send_dshot(repeat_counter)
+            dshot_throttle = repeat_counter
+            time.sleep_ms(50)
+            
+            repeat_counter += STEP_SIZE 
 
-    repeat_counter = 48
-    MAX_THROTTLE = 600
-    STEP_SIZE = 1
-    while (repeat_counter < MAX_THROTTLE):
+        print("------------------------------")
+        # Bring them down safely
+        print("Ramp complete.")
+        # for _ in range(100):
+        #     send_dshot(0)
+        #     time.sleep_ms(10)
         
-        throttle_percent = ((repeat_counter - 48) / (2047 - 48)) * 100
-        print(f"Incrementing throttle: {throttle_percent} % ")
-        # send_dshot(repeat_counter)
-        dshot_throttle = repeat_counter
-        time.sleep_ms(50)
-        
-        repeat_counter += STEP_SIZE 
-
-    print("------------------------------")
-    # Bring them down safely
-    print("Ramp complete.")
-    # for _ in range(100):
-    #     send_dshot(0)
-    #     time.sleep_ms(10)
+    except KeyboardInterrupt:
+        print("!!!EMERGENCY STOP!!!")
 
 
     # for _ in range(10000):  
