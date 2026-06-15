@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DShot600 PIO Driver · RP2040</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+<style>
+:root {
+  --bg: #ffffff;
+  --surface: #f6f9fc;
+  --surface-2: #eef2f7;
+  --border: #e3e8ef;
+  --text: #1a1f36;
+  --text-2: #3c4257;
+  --text-3: #697386;
+  --accent: #2563eb;
+  --accent-light: #eff6ff;
+  --accent-dark: #1d4ed8;
+  --warning-bg: #fffbeb;
+  --warning-border: #f59e0b;
+  --warning-text: #78350f;
+  --note-bg: #eff6ff;
+  --note-border: #2563eb;
+  --note-text: #1e3a8a;
+  --danger-bg: #fef2f2;
+  --danger-border: #ef4444;
+  --danger-text: #7f1d1d;
+  --success-bg: #f0fdf4;
+  --success-border: #22c55e;
+  --success-text: #14532d;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --sidebar-w: 268px;
+  --radius: 8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* LAYOUT */
+.layout { display: flex; min-height: 100vh; }
+
+/* SIDEBAR */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  position: fixed;
+  top: 0; left: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 28px 0 40px;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.sidebar-brand {
+  padding: 0 20px 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+.brand-chip {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 3px 8px;
+  border-radius: 100px;
+  margin-bottom: 10px;
+}
+.sidebar-brand h1 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+.sidebar-brand p {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 3px;
+  font-family: var(--mono);
+}
+
+.nav-group { margin-bottom: 20px; padding: 0 12px; }
+.nav-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0 8px 6px;
+}
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  text-decoration: none;
+  border-radius: 6px;
+  transition: background 0.1s, color 0.1s;
+  line-height: 1.4;
+}
+.nav-link:hover { background: var(--surface-2); color: var(--text); }
+.nav-link.active {
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 500;
+}
+.nav-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+.nav-link.active .nav-dot { opacity: 1; }
+
+/* CONTENT */
+.content {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 800px;
+  padding: 60px 72px 100px;
+}
+
+/* SECTION */
+section { scroll-margin-top: 40px; }
+.section-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+/* TYPOGRAPHY */
+h1 {
+  font-size: 34px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  margin-bottom: 14px;
+}
+h2 {
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  margin: 56px 0 14px;
+  padding-top: 56px;
+  border-top: 1px solid var(--border);
+}
+h2.no-border { border-top: none; padding-top: 0; margin-top: 40px; }
+h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 28px 0 8px;
+  letter-spacing: -0.01em;
+}
+p {
+  font-size: 15px;
+  color: var(--text-2);
+  margin-bottom: 14px;
+  line-height: 1.8;
+}
+ul, ol { margin: 0 0 14px 20px; }
+li {
+  font-size: 15px;
+  color: var(--text-2);
+  line-height: 1.8;
+  margin-bottom: 3px;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  background: #f0f4f8;
+  color: #c7254e;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+/* CODE BLOCKS */
+.code-block {
+  position: relative;
+  margin: 18px 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid #30363d;
+}
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #161b22;
+  padding: 10px 16px;
+  border-bottom: 1px solid #30363d;
+}
+.code-lang {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: #7d8590;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+.copy-btn {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: #7d8590;
+  background: none;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+}
+.copy-btn:hover { color: #e6edf3; border-color: #7d8590; background: #21262d; }
+.copy-btn.copied { color: #3fb950; border-color: #3fb950; }
+.code-block pre { margin: 0; padding: 20px; overflow-x: auto; background: #0d1117; }
+.code-block pre code {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: none;
+  color: inherit;
+  padding: 0;
+  line-height: 1.7;
+}
+.hljs { background: #0d1117 !important; }
+
+/* TABLES */
+.table-wrap {
+  overflow-x: auto;
+  margin: 18px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+thead { background: var(--surface); }
+th {
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+td {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  vertical-align: top;
+  line-height: 1.6;
+}
+tr:last-child td { border-bottom: none; }
+td code { font-size: 12px; }
+td strong { color: var(--text); font-weight: 500; }
+
+/* CALLOUTS */
+.callout {
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  margin: 18px 0;
+}
+.callout-body { flex: 1; }
+.callout p { margin: 0; font-size: 14px; line-height: 1.65; }
+.callout p + p { margin-top: 6px; }
+.callout strong { font-weight: 600; }
+.callout.note { background: var(--note-bg); border-left: 3px solid var(--note-border); color: var(--note-text); }
+.callout.warning { background: var(--warning-bg); border-left: 3px solid var(--warning-border); color: var(--warning-text); }
+.callout.danger { background: var(--danger-bg); border-left: 3px solid var(--danger-border); color: var(--danger-text); }
+.callout.success { background: var(--success-bg); border-left: 3px solid var(--success-border); color: var(--success-text); }
+.callout-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+
+/* HERO */
+.hero { padding-bottom: 44px; border-bottom: 1px solid var(--border); margin-bottom: 52px; }
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 5px 12px;
+  border-radius: 100px;
+  margin-bottom: 18px;
+  letter-spacing: 0.01em;
+}
+.hero-badge::before { content: '●'; font-size: 8px; }
+.hero-desc {
+  font-size: 16.5px;
+  color: var(--text-2);
+  margin: 14px 0 28px;
+  max-width: 580px;
+  line-height: 1.75;
+}
+.specs {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+.spec {
+  flex: 1;
+  padding: 16px 20px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+.spec:last-child { border-right: none; }
+.spec-value {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  font-family: var(--mono);
+  line-height: 1;
+  margin-bottom: 5px;
+}
+.spec-label { font-size: 11.5px; color: var(--text-3); }
+
+/* WAVEFORM */
+.waveform-wrap {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: var(--radius);
+  padding: 24px 20px 16px;
+  margin: 20px 0;
+  overflow-x: auto;
+}
+.waveform-caption {
+  font-size: 12px;
+  color: #7d8590;
+  font-family: var(--mono);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* STEP LIST */
+.step-list { margin: 0; padding: 0; list-style: none; }
+.step {
+  display: flex;
+  gap: 16px;
+  padding-bottom: 24px;
+  position: relative;
+}
+.step::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 30px;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+.step:last-child::before { display: none; }
+.step-num {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.step-body h3 { margin-top: 4px; margin-bottom: 6px; }
+.step-body p { margin-bottom: 8px; }
+
+/* INLINE MONO */
+.mono { font-family: var(--mono); font-size: 13px; }
+
+/* FOOTER */
+.footer {
+  margin-top: 80px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 960px) {
+  .sidebar { display: none; }
+  .content { margin-left: 0; padding: 32px 24px 80px; }
+  .specs { flex-wrap: wrap; }
+  .spec { min-width: 120px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ═══════════════════════════════════════════ SIDEBAR ═══ -->
+<nav class="sidebar" aria-label="Documentation navigation">
+  <div class="sidebar-brand">
+    <div class="brand-chip">RP2040</div>
+    <h1>DShot600 PIO Driver</h1>
+    <p>MicroPython · PIO Assembly</p>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Getting Started</div>
+    <a class="nav-link active" href="#overview"><span class="nav-dot"></span>Overview</a>
+    <a class="nav-link" href="#quickstart"><span class="nav-dot"></span>Quick Start</a>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Architecture</div>
+    <a class="nav-link" href="#architecture"><span class="nav-dot"></span>System Architecture</a>
+    <a class="nav-link" href="#parallel"><span class="nav-dot"></span>Parallel Operation</a>
+    <a class="nav-link" href="#timer"><span class="nav-dot"></span>Background Timer</a>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Protocol</div>
+    <a class="nav-link" href="#dshot-protocol"><span class="nav-dot"></span>DShot Protocol</a>
+    <a class="nav-link" href="#timing"><span class="nav-dot"></span>Bit Timing</a>
+    <a class="nav-link" href="#packet"><span class="nav-dot"></span>Packet Construction</a>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">PIO</div>
+    <a class="nav-link" href="#pio-program"><span class="nav-dot"></span>PIO Program</a>
+    <a class="nav-link" href="#pio-cycles"><span class="nav-dot"></span>Cycle Breakdown</a>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Reference</div>
+    <a class="nav-link" href="#configuration"><span class="nav-dot"></span>Configuration</a>
+    <a class="nav-link" href="#pitfalls"><span class="nav-dot"></span>Common Pitfalls</a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════ CONTENT ═══ -->
+<main class="content">
+
+<!-- ──────────────────────── HERO ──────────────────────── -->
+<section id="overview">
+  <div class="hero">
+    <div class="hero-badge">Open Source · MicroPython</div>
+    <h1>DShot600 PIO Driver</h1>
+    <p class="hero-desc">
+      A hardware-level DShot600 motor control driver for the Raspberry Pi Pico W.
+      Uses the RP2040's programmable I/O (PIO) state machines to generate four
+      perfectly phase-locked DShot waveforms simultaneously — with bit-accurate
+      timing that is completely independent of CPU load or Python execution.
+    </p>
+    <div class="specs">
+      <div class="spec">
+        <span class="spec-value">4.8 MHz</span>
+        <span class="spec-label">PIO clock</span>
+      </div>
+      <div class="spec">
+        <span class="spec-value">1.667 µs</span>
+        <span class="spec-label">Per bit</span>
+      </div>
+      <div class="spec">
+        <span class="spec-value">4</span>
+        <span class="spec-label">Phase-locked motors</span>
+      </div>
+      <div class="spec">
+        <span class="spec-value">1 kHz</span>
+        <span class="spec-label">Update rate</span>
+      </div>
+      <div class="spec">
+        <span class="spec-value">120 MHz</span>
+        <span class="spec-label">CPU clock</span>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="no-border">What this is</h2>
+  <p>
+    DShot is a digital serial protocol used to control brushless motor ESCs (Electronic Speed Controllers)
+    on drones and other robotics platforms. Unlike analog PWM, it sends a 16-bit packet per frame —
+    11 bits of throttle, 1 bit telemetry request, and 4 bits of CRC — with no calibration required
+    and corruption detection built in.
+  </p>
+  <p>
+    This driver runs the entire waveform generation in the RP2040's PIO hardware. The CPU's only
+    job is to write a 32-bit value into a hardware FIFO register once per millisecond. Everything
+    else — bit timing, signal toggling, inter-packet gaps — happens autonomously at the PIO clock
+    rate, with zero CPU involvement between frames.
+  </p>
+
+  <h3>Key properties</h3>
+  <ul>
+    <li><strong>Hardware-level bit timing.</strong> Each bit takes exactly 8 PIO cycles (1.667 µs at 4.8 MHz). Timing does not depend on Python execution speed.</li>
+    <li><strong>Phase-locked four-motor operation.</strong> All four state machines start on the same CPU clock cycle and remain in lockstep indefinitely — data-independent cycle counts guarantee this.</li>
+    <li><strong>Gapless stream via 1 kHz hardware timer.</strong> A periodic timer ISR feeds the FIFOs continuously, so <code>print()</code>, garbage collection, or any Python latency cannot create signal gaps that would disarm the ESCs.</li>
+    <li><strong>Direct FIFO writes.</strong> <code>mem32</code> writes bypass MicroPython's state machine API, removing per-call overhead and ensuring the four writes land within a handful of CPU cycles of each other.</li>
+  </ul>
+</section>
+
+<!-- ──────────────────────── QUICK START ──────────────────────── -->
+<section id="quickstart">
+  <h2>Quick Start</h2>
+  <p>Flash the Pico W, connect your ESCs to GPIO 6, 5, 4, and 3, then run:</p>
+
+  <ol class="step-list">
+    <li class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h3>Copy the driver to your Pico</h3>
+        <p>Transfer <code>dshot_parallel.py</code> to the Pico W via Thonny or <code>mpremote</code>. No external libraries are required — only the MicroPython standard library and the <code>rp2</code> module built into RP2040 firmware.</p>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h3>Wire your ESCs</h3>
+        <p>Connect each ESC's signal wire to the corresponding GPIO pin. No level shifter needed — ESCs accept 3.3 V DShot logic from the Pico directly.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>State Machine</th><th>GPIO</th><th>Motor</th></tr></thead>
+            <tbody>
+              <tr><td>SM 0</td><td><code>GPIO 6</code></td><td>Motor 1</td></tr>
+              <tr><td>SM 1</td><td><code>GPIO 5</code></td><td>Motor 2</td></tr>
+              <tr><td>SM 2</td><td><code>GPIO 4</code></td><td>Motor 3</td></tr>
+              <tr><td>SM 3</td><td><code>GPIO 3</code></td><td>Motor 4</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h3>Run with props removed</h3>
+        <p>Always bench-test with propellers removed. The script arms the ESCs at throttle 0 for 2 seconds, then ramps from 48 (0 % effective throttle) to your configured maximum.</p>
+
+        <div class="code-block">
+          <div class="code-block-header">
+            <span class="code-lang">python</span>
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-python">import rp2, machine
+from machine import Pin, mem32
+import time
+
+machine.freq(120_000_000)
+MOTOR_PINS   = [6, 5, 4, 3]
+DSHOT_FREQ   = 4_800_000   # DShot600
+PIO0_CTRL    = 0x50200000
+SM_TXFIFO    = [0x50200010, 0x50200014, 0x50200018, 0x5020001c]
+
+# After defining the dshot() PIO program and make_packet() ...
+
+dshot_throttle = 0
+
+def _dshot_ticker(timer):
+    packet = make_packet(dshot_throttle) << 16
+    for addr in SM_TXFIFO:
+        mem32[addr] = packet
+
+def main():
+    global dshot_throttle
+    state_machines = [
+        rp2.StateMachine(i, dshot, freq=DSHOT_FREQ, sideset_base=Pin(MOTOR_PINS[i]))
+        for i in range(4)
+    ]
+    for sm in state_machines:
+        sm.restart()
+    mem32[PIO0_CTRL] = 0b1111          # start all 4 SMs on same cycle
+
+    timer = machine.Timer()
+    timer.init(freq=1000, mode=machine.Timer.PERIODIC, callback=_dshot_ticker)
+
+    dshot_throttle = 0
+    time.sleep(2)                       # arm phase — timer streams 0 continuously
+
+    for t in range(48, 600):
+        dshot_throttle = t
+        time.sleep_ms(50)
+</code></pre>
+        </div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- ──────────────────────── ARCHITECTURE ──────────────────────── -->
+<section id="architecture">
+  <h2>System Architecture</h2>
+  <p>
+    The driver is organized into three independent layers. The key design insight is that the
+    physical signal — what the ESC actually sees — is generated entirely in PIO hardware, not Python.
+    Python only decides <em>what value</em> to send; the PIO decides <em>how to send it</em>.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Layer</th><th>Runs on</th><th>Rate</th><th>Job</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Main loop</strong></td>
+          <td>RP2040 CPU core 0</td>
+          <td>Application-defined</td>
+          <td>Updates the <code>dshot_throttle</code> global variable. Can sleep, print, or compute without affecting signal quality.</td>
+        </tr>
+        <tr>
+          <td><strong>1 kHz timer ISR</strong></td>
+          <td>RP2040 CPU (IRQ)</td>
+          <td>1,000 Hz</td>
+          <td>Calls <code>_dshot_ticker()</code> once per millisecond, writing the current throttle packet to all four TX FIFOs via <code>mem32</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>PIO state machines</strong></td>
+          <td>PIO0 hardware (SM 0–3)</td>
+          <td>4.8 MHz</td>
+          <td>Each SM runs the <code>dshot()</code> PIO program autonomously. Pulls packets from its FIFO and shifts them out one bit every 8 cycles (~1.667 µs). Drives the GPIO directly via <code>.side()</code> instructions.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-icon">ℹ</div>
+    <div class="callout-body">
+      <p><strong>The PIO does not use the CPU between frames.</strong> Once a packet is in the FIFO, the state machine runs entirely on its own clock divider (derived from the 120 MHz system clock). A Python GC pause, a blocked <code>print()</code>, or any other CPU latency cannot affect the signal that is already in flight.</p>
+    </div>
+  </div>
+
+  <p>
+    Because all four SMs run the same program at the same clock frequency and are started simultaneously
+    with a single <code>mem32[PIO0_CTRL] = 0b1111</code> write, they remain phase-locked for the
+    lifetime of the program. Both the ONE path (bit = 1) and the ZERO path (bit = 0) through
+    the PIO program take exactly 8 cycles, so there is no drift regardless of the data being sent.
+  </p>
+</section>
+
+<!-- ──────────────────────── DSHOT PROTOCOL ──────────────────────── -->
+<section id="dshot-protocol">
+  <h2>DShot Protocol</h2>
+  <p>
+    DShot is a unidirectional digital protocol (the extended DShot-EDT variant adds bidirectional telemetry,
+    but that is not implemented here). Each frame is a 16-bit packet clocked out MSB-first with no
+    gaps between bits.
+  </p>
+
+  <h3>Packet structure</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Field</th><th>Bits</th><th>Position</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Throttle</strong></td>
+          <td>11 bits</td>
+          <td>15 → 5</td>
+          <td>Motor command. <code>0</code> = disarm signal. <code>1–47</code> = reserved special commands (do not send as throttle). <code>48–2047</code> = throttle range (0 % → 100 %).</td>
+        </tr>
+        <tr>
+          <td><strong>Telemetry</strong></td>
+          <td>1 bit</td>
+          <td>4</td>
+          <td>Set to <code>1</code> to request ESC telemetry on the next frame. Normally <code>0</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>CRC</strong></td>
+          <td>4 bits</td>
+          <td>3 → 0</td>
+          <td>Cyclic Redundancy Check. Computed as the XOR of the three upper nibbles of the 12-bit (throttle + telemetry) value, masked to 4 bits. Allows the ESC to detect corrupted frames.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Throttle range</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Value range</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>0</code></td><td>Disarm / idle signal. Sent continuously during arming.</td></tr>
+        <tr><td><code>1 – 47</code></td><td><strong>Reserved special commands.</strong> Interpreted by the ESC as digital commands (beep, motor direction, 3D mode, etc.). Never send these as throttle — they will trigger ESC actions, not spin the motor.</td></tr>
+        <tr><td><code>48 – 2047</code></td><td>Throttle. <code>48</code> = 0 % thrust, <code>2047</code> = 100 % thrust. Always start ramps from <code>48</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warning">
+    <div class="callout-icon">⚠</div>
+    <div class="callout-body">
+      <p><strong>Never start a throttle ramp from 1.</strong> Values 1–47 are special ESC commands. Sending them sequentially during a ramp triggers beeps, mode changes, or other ESC behavior — which is the most common cause of erratic motor behavior during first bring-up. Always start at <code>48</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────── BIT TIMING ──────────────────────── -->
+<section id="timing">
+  <h2>Bit Timing</h2>
+  <p>
+    DShot encodes each bit as a fixed-width pulse. The width of the HIGH portion determines
+    whether the bit is a 1 or 0. The total bit period is always the same — only the duty cycle changes.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Protocol</th><th>Bit period</th><th>T1H (bit = 1)</th><th>T0H (bit = 0)</th><th>PIO frequency</th><th>Cycles / bit</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>DShot 150</td>
+          <td>6.667 µs</td>
+          <td>5.00 µs (75 %)</td>
+          <td>2.50 µs (37.5 %)</td>
+          <td>1.2 MHz</td>
+          <td>8</td>
+        </tr>
+        <tr>
+          <td>DShot 300</td>
+          <td>3.333 µs</td>
+          <td>2.50 µs (75 %)</td>
+          <td>1.25 µs (37.5 %)</td>
+          <td>2.4 MHz</td>
+          <td>8</td>
+        </tr>
+        <tr>
+          <td><strong>DShot 600</strong></td>
+          <td><strong>1.667 µs</strong></td>
+          <td><strong>1.25 µs (75 %)</strong></td>
+          <td><strong>0.625 µs (37.5 %)</strong></td>
+          <td><strong>4.8 MHz</strong></td>
+          <td><strong>8</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    The PIO program uses 8 cycles per bit for all three speeds. Switching between DShot variants
+    only requires changing <code>DSHOT_FREQUENCY</code> — no changes to the PIO assembly.
+    All three frequencies divide evenly from 120 MHz (dividers of 100, 50, and 25 respectively),
+    so there is no fractional clock jitter on any speed.
+  </p>
+
+  <div class="waveform-wrap">
+    <svg viewBox="0 0 580 132" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;min-width:400px">
+      <!-- bit labels -->
+      <text x="105" y="13" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="12" fill="#60a5fa" font-weight="500">1</text>
+      <text x="225" y="13" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="12" fill="#94a3b8" font-weight="500">0</text>
+      <text x="345" y="13" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="12" fill="#60a5fa" font-weight="500">1</text>
+      <text x="465" y="13" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="12" fill="#94a3b8" font-weight="500">0</text>
+
+      <!-- bit period dividers -->
+      <line x1="45" y1="20" x2="45" y2="90" stroke="#21262d" stroke-width="1"/>
+      <line x1="165" y1="20" x2="165" y2="90" stroke="#21262d" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="285" y1="20" x2="285" y2="90" stroke="#21262d" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="405" y1="20" x2="405" y2="90" stroke="#21262d" stroke-width="1" stroke-dasharray="3 3"/>
+      <line x1="525" y1="20" x2="525" y2="90" stroke="#21262d" stroke-width="1"/>
+
+      <!-- HIGH fill regions -->
+      <rect x="45" y="27" width="90" height="35" fill="#3b82f6" opacity="0.18" rx="2"/>
+      <rect x="165" y="27" width="45" height="35" fill="#3b82f6" opacity="0.18" rx="2"/>
+      <rect x="285" y="27" width="90" height="35" fill="#3b82f6" opacity="0.18" rx="2"/>
+      <rect x="405" y="27" width="45" height="35" fill="#3b82f6" opacity="0.18" rx="2"/>
+
+      <!-- H/L markers -->
+      <text x="16" y="49" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#4b5563">H</text>
+      <text x="16" y="75" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#4b5563">L</text>
+      <line x1="24" y1="27" x2="24" y2="90" stroke="#374151" stroke-width="1"/>
+
+      <!-- waveform signal -->
+      <polyline
+        points="24,69 45,69 45,27 135,27 135,69 165,69 165,27 210,27 210,69 285,69 285,27 375,27 375,69 405,69 405,27 450,27 450,69 525,69 560,69"
+        fill="none" stroke="#60a5fa" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+
+      <!-- T1H bracket -->
+      <line x1="45" y1="96" x2="135" y2="96" stroke="#4b5563" stroke-width="1"/>
+      <line x1="45" y1="92" x2="45" y2="100" stroke="#4b5563" stroke-width="1"/>
+      <line x1="135" y1="92" x2="135" y2="100" stroke="#4b5563" stroke-width="1"/>
+      <text x="90" y="113" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#6b7280">T1H = 1250 ns</text>
+
+      <!-- T0H bracket -->
+      <line x1="165" y1="96" x2="210" y2="96" stroke="#4b5563" stroke-width="1"/>
+      <line x1="165" y1="92" x2="165" y2="100" stroke="#4b5563" stroke-width="1"/>
+      <line x1="210" y1="92" x2="210" y2="100" stroke="#4b5563" stroke-width="1"/>
+      <text x="187" y="113" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#6b7280">T0H = 625 ns</text>
+
+      <!-- bit period bracket -->
+      <line x1="405" y1="96" x2="525" y2="96" stroke="#374151" stroke-width="1"/>
+      <line x1="405" y1="92" x2="405" y2="100" stroke="#374151" stroke-width="1"/>
+      <line x1="525" y1="92" x2="525" y2="100" stroke="#374151" stroke-width="1"/>
+      <text x="465" y="113" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#6b7280">bit period = 1.667 µs</text>
+    </svg>
+    <p class="waveform-caption">DShot600 bit encoding — bit 1 stays HIGH for 75 % of the period; bit 0 for 37.5 %</p>
+  </div>
+</section>
+
+<!-- ──────────────────────── PACKET CONSTRUCTION ──────────────────────── -->
+<section id="packet">
+  <h2>Packet Construction</h2>
+  <p>
+    <code>make_packet(throttle, telemetry=False)</code> builds the 16-bit DShot frame in three steps.
+  </p>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span class="code-lang">python</span>
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    </div>
+    <pre><code class="language-python">def make_packet(throttle, telemetry=False):
+    # Step 1: shift throttle left to make room for the telemetry bit
+    packet = (throttle << 1) | (1 if telemetry else 0)
+
+    # Step 2: compute CRC — XOR the three upper nibbles, keep lower 4 bits
+    crc = (packet ^ (packet >> 4) ^ (packet >> 8)) & 0x0F
+
+    # Step 3: append CRC in the lower 4 bits
+    return (packet << 4) | crc
+</code></pre>
+  </div>
+
+  <h3>Worked example: throttle = 1024</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Step</th><th>Operation</th><th>Result (hex)</th><th>Result (binary)</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Throttle</td>
+          <td><code>1024</code></td>
+          <td><code>0x400</code></td>
+          <td><code>100 0000 0000</code></td>
+        </tr>
+        <tr>
+          <td>Shift + telemetry</td>
+          <td><code>1024 &lt;&lt; 1 | 0</code></td>
+          <td><code>0x800</code></td>
+          <td><code>1000 0000 0000</code></td>
+        </tr>
+        <tr>
+          <td>CRC nibbles</td>
+          <td><code>0x800 ^ 0x080 ^ 0x008</code></td>
+          <td><code>0x888</code></td>
+          <td><code>1000 1000 1000</code></td>
+        </tr>
+        <tr>
+          <td>Mask to 4 bits</td>
+          <td><code>0x888 &amp; 0x0F</code></td>
+          <td><code>0x8</code></td>
+          <td><code>1000</code></td>
+        </tr>
+        <tr>
+          <td><strong>Final packet</strong></td>
+          <td><code>(0x800 &lt;&lt; 4) | 0x8</code></td>
+          <td><strong><code>0x8008</code></strong></td>
+          <td><code>1000 0000 0000 1000</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    The 16-bit packet <code>0x8008</code> is then left-shifted 16 positions before being written to
+    the TX FIFO, placing the packet in the upper half of the 32-bit OSR. When the PIO shifts out
+    bits using <code>SHIFT_LEFT</code>, it reads from MSB first — so bit 15 of the packet
+    (the throttle MSB) exits the GPIO first, as DShot requires.
+  </p>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span class="code-lang">python</span>
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    </div>
+    <pre><code class="language-python">def send_dshot_all(throttle):
+    packet = make_packet(throttle) << 16   # 0x8008 → 0x80080000
+    for addr in SM_TXFIFO:
+        mem32[addr] = packet               # write directly to each TXFIFO register
+</code></pre>
+  </div>
+</section>
+
+<!-- ──────────────────────── PIO PROGRAM ──────────────────────── -->
+<section id="pio-program">
+  <h2>PIO Program</h2>
+  <p>
+    The <code>dshot()</code> function is compiled by the <code>@rp2.asm_pio</code> decorator into
+    a native PIO state machine program. It runs entirely on the PIO hardware, independent of the CPU.
+  </p>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span class="code-lang">python (PIO assembly)</span>
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    </div>
+    <pre><code class="language-python">@rp2.asm_pio(
+    out_shiftdir=rp2.PIO.SHIFT_LEFT,   # MSB-first — DShot requires this
+    autopull=False,
+    set_init=rp2.PIO.OUT_LOW,
+    out_init=rp2.PIO.OUT_LOW,
+    sideset_init=rp2.PIO.OUT_LOW,
+)
+def dshot():
+    pull(block)             # wait for a packet in the FIFO; signal stays LOW
+    set(x, 15)              # load bit counter: 16 bits (counts 15 down to 0)
+
+    label("BITLOOP")
+    out(y, 1).side(1) [1]          # shift 1 bit into y, pull signal HIGH — 2 cycles
+    jmp(not_y, "ZERO").side(1)     # if bit=0, jump to ZERO; stays HIGH — 1 cycle
+
+    # --- bit = 1 path (6 cycles HIGH, 2 cycles LOW) ---
+    nop().side(1) [2]              # hold HIGH — 3 cycles
+    jmp(x_dec, "BITLOOP").side(0) [1]  # loop if bits remain, pull LOW — 2 cycles
+    jmp("DONE")                    # only reached on last bit if it was 1
+
+    # --- bit = 0 path (3 cycles HIGH, 5 cycles LOW) ---
+    label("ZERO")
+    nop().side(0) [2]              # hold LOW — 3 cycles
+    jmp(x_dec, "BITLOOP").side(0) [1]  # loop if bits remain, stay LOW — 2 cycles
+
+    label("DONE")
+    nop().side(0) [1]              # inter-packet LOW gap — 2 cycles, then wrap to pull()
+</code></pre>
+  </div>
+</section>
+
+<!-- ──────────────────────── CYCLE BREAKDOWN ──────────────────────── -->
+<section id="pio-cycles">
+  <h2>Cycle Breakdown</h2>
+  <p>
+    The critical property of this PIO program is that both the bit-1 path and the bit-0 path through the
+    loop take <strong>exactly 8 cycles</strong>. This data-independence is what keeps four state machines
+    in perfect lockstep — there is no timing condition that could cause one SM to run faster or slower
+    than another based on the data being sent.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Instruction</th><th>Cycles</th><th>Signal</th><th>Path</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>out(y, 1).side(1) [1]</code></td><td>2</td><td>HIGH</td><td>Both</td></tr>
+        <tr><td><code>jmp(not_y, "ZERO").side(1)</code></td><td>1</td><td>HIGH</td><td>Both (jump taken if bit = 0)</td></tr>
+        <tr><td><code>nop().side(1) [2]</code></td><td>3</td><td>HIGH</td><td>Bit = 1 only</td></tr>
+        <tr><td><code>jmp(x_dec, "BITLOOP").side(0) [1]</code></td><td>2</td><td>LOW</td><td>Bit = 1 only</td></tr>
+        <tr><td><code>nop().side(0) [2]</code></td><td>3</td><td>LOW</td><td>Bit = 0 only</td></tr>
+        <tr><td><code>jmp(x_dec, "BITLOOP").side(0) [1]</code></td><td>2</td><td>LOW</td><td>Bit = 0 only</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th></th><th>HIGH cycles</th><th>LOW cycles</th><th>Total</th><th>Duty cycle</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Bit = 1</strong></td>
+          <td>2 + 1 + 3 = <strong>6</strong></td>
+          <td>2</td>
+          <td>8</td>
+          <td>6/8 = 75 % ✓</td>
+        </tr>
+        <tr>
+          <td><strong>Bit = 0</strong></td>
+          <td>2 + 1 = <strong>3</strong></td>
+          <td>3 + 2 = 5</td>
+          <td>8</td>
+          <td>3/8 = 37.5 % ✓</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout note">
+    <div class="callout-icon">ℹ</div>
+    <div class="callout-body">
+      <p><strong>Why jmp("DONE") is necessary.</strong> When the last bit (x = 0) is a 1, <code>jmp(x_dec, "BITLOOP")</code> does not jump (x was already 0 before decrement). Without <code>jmp("DONE")</code>, execution falls through into the ZERO label body, runs two more instructions, and then sees x = 0xFFFFFFFF (non-zero after wrap) — causing the bit loop to restart with a corrupted counter and spurious signal. The <code>jmp("DONE")</code> after the bit-1 loop jump is executed <em>only</em> for the final bit when it is a 1; for all other bit-1 iterations, the preceding <code>jmp(x_dec)</code> jumps back to BITLOOP and this instruction is never reached.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────── PARALLEL OPERATION ──────────────────────── -->
+<section id="parallel">
+  <h2>Parallel Operation</h2>
+  <p>
+    Enabling all four state machines with a single register write is what synchronizes them to
+    the same clock cycle. After that, because the PIO program has a data-independent cycle count,
+    they remain in lockstep indefinitely.
+  </p>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span class="code-lang">python</span>
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    </div>
+    <pre><code class="language-python">PIO0_BASE = 0x50200000
+CTRL      = PIO0_BASE + 0x00   # PIO0 control register
+
+# Reset each SM's program counter to instruction 0
+for sm in state_machines:
+    sm.restart()
+
+# Enable all four SMs in a single write — they execute their first cycle together
+mem32[CTRL] = 0b1111
+</code></pre>
+  </div>
+
+  <h3>Direct FIFO writes</h3>
+  <p>
+    TX FIFO registers are physically adjacent 32-bit addresses in the RP2040's memory map.
+    Writing to them with <code>mem32</code> bypasses all MicroPython overhead and completes
+    in a handful of CPU cycles (~8–12 ns each at 120 MHz), which is negligible compared to
+    the 26.7 µs DShot600 frame period.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Register</th><th>Address</th><th>State Machine</th><th>GPIO</th></tr></thead>
+      <tbody>
+        <tr><td><code>TXF0</code></td><td><code>0x50200010</code></td><td>SM 0</td><td>GPIO 6</td></tr>
+        <tr><td><code>TXF1</code></td><td><code>0x50200014</code></td><td>SM 1</td><td>GPIO 5</td></tr>
+        <tr><td><code>TXF2</code></td><td><code>0x50200018</code></td><td>SM 2</td><td>GPIO 4</td></tr>
+        <tr><td><code>TXF3</code></td><td><code>0x5020001c</code></td><td>SM 3</td><td>GPIO 3</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warning">
+    <div class="callout-icon">⚠</div>
+    <div class="callout-body">
+      <p><strong>Silent dropped writes.</strong> If a FIFO is full when you write to it, the write is silently discarded. The TX FIFO is 4 entries deep. At the packet rate used here (1 kHz timer, ~26.7 µs frame time), the FIFO is always drained well before the next write — but at high update rates, a dropped write to one FIFO causes that motor to repeat its previous packet, which looks like momentary cross-motor desynchronization.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────── BACKGROUND TIMER ──────────────────────── -->
+<section id="timer">
+  <h2>Background Timer</h2>
+  <p>
+    The 1 kHz periodic timer is what decouples the DShot stream from Python execution.
+    ESCs need a continuous stream of packets — any gap longer than ~20–100 ms (depending on
+    firmware) causes the ESC to enter failsafe and cut motor output.
+  </p>
+  <p>
+    Before the timer was introduced, the DShot stream was driven by a <code>while True</code>
+    loop calling <code>send_dshot()</code> directly. A single <code>print()</code> call
+    inside that loop can block for hundreds of milliseconds when the USB-CDC output buffer
+    fills — long enough to disarm every ESC.
+  </p>
+
+  <div class="code-block">
+    <div class="code-block-header">
+      <span class="code-lang">python</span>
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    </div>
+    <pre><code class="language-python">dshot_throttle = 0   # module-level global — readable by the timer ISR
+
+def _dshot_ticker(timer):          # called 1000x/sec by the hardware timer
+    packet = make_packet(dshot_throttle) << 16
+    for addr in SM_TXFIFO:
+        mem32[addr] = packet
+
+dshot_timer = machine.Timer()
+dshot_timer.init(
+    freq=1000,
+    mode=machine.Timer.PERIODIC,   # fires every 1 ms, indefinitely
+    callback=_dshot_ticker,
+)
+
+# Main loop only needs to update the value — timer handles transmission
+def main():
+    global dshot_throttle
+    for t in range(48, 600):
+        dshot_throttle = t          # timer picks this up on its next tick
+        print(f"throttle: {t}")     # safe to print — timer keeps stream alive
+        time.sleep_ms(50)
+</code></pre>
+  </div>
+
+  <h3>ONE_SHOT vs PERIODIC</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Mode</th><th>Behavior</th><th>Use case</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>machine.Timer.PERIODIC</code></td>
+          <td>Fires callback every <em>period</em> ms indefinitely until <code>.deinit()</code>.</td>
+          <td><strong>This driver.</strong> Keeps DShot stream continuous for the lifetime of the program.</td>
+        </tr>
+        <tr>
+          <td><code>machine.Timer.ONE_SHOT</code></td>
+          <td>Fires callback exactly once after <em>period</em> ms, then stops.</td>
+          <td>Delayed one-time actions, watchdogs, timeouts. Not suitable for continuous streaming.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout danger">
+    <div class="callout-icon">✕</div>
+    <div class="callout-body">
+      <p><strong>Callback signature must be exactly one parameter.</strong> <code>machine.Timer</code> calls its callback as <code>callback(timer)</code> — one argument, the timer object. A callback defined as <code>def _dshot_ticker(timer, throttle)</code> raises <code>TypeError: function takes 1 positional argument but 2 were given</code> inside the IRQ handler, 1,000 times per second. On RP2040, this floods the USB-CDC output buffer, effectively hanging the board.</p>
+      <p>The throttle value is read from the module-level <code>dshot_throttle</code> global — it does not need to be passed as a parameter.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────── CONFIGURATION ──────────────────────── -->
+<section id="configuration">
+  <h2>Configuration Reference</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Constant</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>MOTOR_PINS</code></td>
+          <td><code>[6, 5, 4, 3]</code></td>
+          <td>GPIO pin numbers for SM 0 through SM 3 respectively. Change to match your wiring.</td>
+        </tr>
+        <tr>
+          <td><code>DSHOT_FREQUENCY</code></td>
+          <td><code>4_800_000</code></td>
+          <td>PIO clock in Hz. <code>4_800_000</code> = DShot600, <code>2_400_000</code> = DShot300, <code>1_200_000</code> = DShot150. All divide evenly from 120 MHz.</td>
+        </tr>
+        <tr>
+          <td><code>machine.freq()</code></td>
+          <td><code>120_000_000</code></td>
+          <td>System clock. RP2040 supports up to 133 MHz. 120 MHz gives clean integer PIO dividers. Must be set before creating state machines.</td>
+        </tr>
+        <tr>
+          <td>Timer <code>freq</code></td>
+          <td><code>1000</code></td>
+          <td>DShot update rate in Hz. 1000 Hz (one packet per millisecond) is well above any ESC's failsafe timeout. Can be increased toward DShot600's theoretical max of ~37 kHz.</td>
+        </tr>
+        <tr>
+          <td>Arming duration</td>
+          <td><code>time.sleep(2)</code></td>
+          <td>Seconds of throttle-0 packets sent before arming completes. Most ESCs require 0.5–2 seconds. Increase if ESCs beep but do not arm.</td>
+        </tr>
+        <tr>
+          <td>Throttle minimum</td>
+          <td><code>48</code></td>
+          <td>First valid throttle value (0 % thrust). Do not start ramps from values below 48.</td>
+        </tr>
+        <tr>
+          <td>Throttle maximum</td>
+          <td><code>2047</code></td>
+          <td>100 % thrust. Approach this value gradually — jumping to max from 48 on a bench test with props attached is dangerous.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ──────────────────────── PITFALLS ──────────────────────── -->
+<section id="pitfalls">
+  <h2>Common Pitfalls</h2>
+
+  <h3>Throttle ramp starting from 1</h3>
+  <div class="callout warning">
+    <div class="callout-icon">⚠</div>
+    <div class="callout-body">
+      <p>DShot values 1–47 are reserved ESC commands (motor beep, direction change, etc.). Starting a ramp at <code>1</code> sends dozens of unintended commands before the motor ever receives a throttle value. Always start at <code>48</code>.</p>
+    </div>
+  </div>
+
+  <h3>print() inside a tight DShot loop</h3>
+  <div class="callout danger">
+    <div class="callout-icon">✕</div>
+    <div class="callout-body">
+      <p>When the board is not connected to an active REPL terminal, <code>print()</code> over USB-CDC can block for hundreds of milliseconds once the output buffer fills. A single blocked <code>print()</code> inside a bare <code>while True: send_dshot()</code> loop pauses the entire stream — long enough to disarm ESCs and cause exactly the "inconsistent motor movement" pattern. Move all logging outside the timer ISR and use the timer-based architecture so prints cannot affect signal continuity.</p>
+    </div>
+  </div>
+
+  <h3>Two senders writing to the same FIFOs</h3>
+  <div class="callout danger">
+    <div class="callout-icon">✕</div>
+    <div class="callout-body">
+      <p>Do not call <code>send_dshot()</code> from both the main loop and a timer callback at the same time. The two callers write packets independently and interleave on the wire — the ESC alternately sees the loop's value and the timer's value, which looks like randomly fluctuating throttle. The timer should be the <em>only</em> source of FIFO writes. The main loop only updates <code>dshot_throttle</code>.</p>
+    </div>
+  </div>
+
+  <h3>Timer callback with wrong signature</h3>
+  <div class="callout danger">
+    <div class="callout-icon">✕</div>
+    <div class="callout-body">
+      <p><code>machine.Timer</code> calls its callback with exactly one argument. <code>def _dshot_ticker(timer, extra_arg)</code> crashes every tick with <code>TypeError</code>. The correct signature is <code>def _dshot_ticker(timer)</code> — read shared state from module-level globals.</p>
+    </div>
+  </div>
+
+  <h3>Restarting a single state machine after synchronized start</h3>
+  <div class="callout warning">
+    <div class="callout-icon">⚠</div>
+    <div class="callout-body">
+      <p>Calling <code>sm.restart()</code> or <code>sm.active(0)</code> on one SM resets only that SM's program counter and clock divider phase. It will re-enter the loop out of sync with the other three. If an individual SM needs to be reset, restart all four and re-issue <code>mem32[CTRL] = 0b1111</code>.</p>
+    </div>
+  </div>
+
+  <h3>Setting machine.freq() after creating state machines</h3>
+  <div class="callout warning">
+    <div class="callout-icon">⚠</div>
+    <div class="callout-body">
+      <p>The PIO clock divider is computed from the system clock at the moment <code>rp2.StateMachine(..., freq=...)</code> is called. Changing <code>machine.freq()</code> afterward does not update the divider, so the PIO will run at the wrong frequency. Always call <code>machine.freq()</code> before creating state machines.</p>
+    </div>
+  </div>
+
+  <div class="callout success">
+    <div class="callout-icon">✓</div>
+    <div class="callout-body">
+      <p><strong>Scope check before debugging in software.</strong> If motors behave inconsistently after applying all of the above, probe GPIO 6 and GPIO 3 simultaneously on two oscilloscope channels. If the two waveforms are phase-locked and continuous throughout the run, the signal is correct — the issue is downstream (ESC calibration, power rail sag, mechanical imbalance, or per-ESC firmware settings). If the waveforms drift apart or show idle gaps, there is still a synchronization or stream-continuity issue to resolve in software.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<div class="footer">
+  <span>DShot600 PIO Driver · Raspberry Pi Pico W · Author: Bekhruz Malikov</span>
+  <span>MicroPython · RP2040 · PIO Assembly</span>
+</div>
+
+</main>
+</div>
+
+<script>
+// Syntax highlighting
+document.addEventListener('DOMContentLoaded', () => {
+  hljs.highlightAll();
+  addCopyButtons();
+  initScrollSpy();
+});
+
+// Copy buttons
+function copyCode(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  navigator.clipboard.writeText(pre.innerText).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.classList.remove('copied');
+    }, 1800);
+  });
+}
+
+function addCopyButtons() {
+  // buttons are already in HTML, nothing needed here
+}
+
+// Scroll spy — update active nav link
+function initScrollSpy() {
+  const links = document.querySelectorAll('.nav-link[href^="#"]');
+  const sections = Array.from(links).map(l => document.querySelector(l.getAttribute('href'))).filter(Boolean);
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.nav-link[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -75% 0px', threshold: 0 });
+
+  sections.forEach(s => observer.observe(s));
+}
+</script>
+</body>
+</html>

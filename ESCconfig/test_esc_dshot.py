@@ -178,7 +178,49 @@ def setup_dshot_sm():
     # reset state machines to ensure no packets are sent to ESCs yet 
     for sm in state_machines:
             sm.restart()
-   
+
+############
+# RECEIVER 
+# SIMULATION
+############
+#################################################################################################
+
+def receive_joystick_sim():
+    """
+    Simulated joystick receiver.
+    Type ADC values manually in serial input.
+
+    Simulation:
+    throttle up - y1(+)
+    throttle down - y1(-)
+
+    Format:
+    y
+    """
+    y = int(input("Throttle ADC y-direction (0-4095): "))
+    return y
+
+
+def joystick_to_throttle(y):
+    """
+    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
+
+    Output: a dshot throttle value 
+    """
+
+    min_throttle = 48
+    max_throttle = 300
+    normalize = (max_throttle - min_throttle) / 4095
+
+    return int(
+        min_throttle +
+        y * normalize
+    )
+
+
+#################################################################################################
+
+
 def main():
     """
     Entry point for ESC initialization and motor testing.
@@ -251,7 +293,17 @@ def main():
         print("------------------------------")
 
         while True: 
-            machine.mem32[0x50200000] = 0b0000
+            # Simulation 1: throttle test - all motors phase locked -> SUCCESS 
+            input = receive_joystick_sim()
+            dshot_throttle = joystick_to_throttle(input)
+            
+            # Simulation 2: yaw test - diagonal motors turn on and others off slightly
+
+            # Simulation 3: roll test - side motors turn on and others off slightly 
+
+            # Simulation 4: pitch test - front and rear motors turn on and off slightly 
+
+            # Once simulation is done succesfully, move on to hover and stability test 
         
         # Bring them down safely
         print("Ramp complete.")
@@ -260,7 +312,7 @@ def main():
         #     time.sleep_ms(10)
 
     except KeyboardInterrupt:
-        print("!!!EMERGENCY STOP!!!")
+        print("\n!!!EMERGENCY STOP!!!")
 
 if __name__  == '__main__' :
     main()
