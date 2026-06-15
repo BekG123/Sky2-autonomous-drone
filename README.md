@@ -11,6 +11,24 @@ Bekhruz Malikov (Lead), Nathan Zhao, Jonah Nazarian, Anirudh Srikrishna, Honglon
 
 The Sky2 Team serves as the rapid prototyping division of SkyRunners, focused on advancing next-generation autonomous aerial systems. Our mission is to design, build, and deploy state-of-the-art drone hardware and intelligent software infrastructure to enable scalable, vision-language-action (VLA)–based food delivery services.
 
+## Documentation
+
+See the [Project Name documentation][docs-link] for full reference.
+
+## Requirements
+
+- Requirement one (e.g. hardware, runtime, OS)
+- Requirement two
+- Requirement three
+
+## Installation
+
+Install with:
+
+```sh
+# command to install or flash or set up
+```
+
 ## Focus
 
 Vision-Language-Action Integration (VLA)  
@@ -31,24 +49,6 @@ To be the first and the best to get cool shit done: build an autonomous VLA-base
 ## Institutional Affiliation
 
 Sky2 operates within the broader SkyRunners initiative at Stanford University, contributing to interdisciplinary research spanning artificial intelligence, robotics, and real-world deployment systems.
-
-## Documentation
-
-See the [Project Name documentation][docs-link] for full reference.
-
-## Requirements
-
-- Requirement one (e.g. hardware, runtime, OS)
-- Requirement two
-- Requirement three
-
-## Installation
-
-Install with:
-
-```sh
-# command to install or flash or set up
-```
 
 
 
