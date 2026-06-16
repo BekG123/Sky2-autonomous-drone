@@ -108,5 +108,249 @@ while True:
 print(len(bin(test_packet)) - 2) # len of bitstream 
 
 
+############
+# RECEIVER 
+# SIMULATION
+############
+#################################################################################################
 
+def receive_joystick_sim_throttle():
+    """
+    Simulated joystick receiver.
+    Type ADC values manually in serial input.
+
+    Simulation: (vision: hand points up and down)
+    throttle up - y1(+)
+    throttle down - y1(-)
+
+    Format:
+    y
+    """
+    y = int(input("Throttle ADC y-direction (0-4095): "))
+    return y
+
+def receive_joystick_sim_yaw():
+    """
+    Simulated joystick receiver.
+    Type ADC values manually in serial input.
+
+    Simulation: (vision: hands rotate along x-axis)
+    yaw right - x1(+)
+    yaw left - x1(-)
+
+    Format:
+    x
+    """
+    x = int(input("Throttle ADC y-direction (0-4095): "))
+    return x
+
+def receive_joystick_sim_roll():
+    """
+    Simulated joystick receiver.
+    Type ADC values manually in serial input.
+
+    Simulation: (vision: hands rotate along x-axis)
+    roll right - a1(+)
+    roll left - a1(-)
+
+    Format:
+    a
+    """
+    a = int(input("Throttle ADC y-direction (0-4095): "))
+    return a
+
+def receive_joystick_sim_pitch():
+    """
+    Simulated joystick receiver.
+    Type ADC values manually in serial input.
+
+    Simulation: (vision: hands rotate along x-axis)
+    pitch up - b1(+)
+    pitch down - b1(-)
+
+    Format:
+    b
+    """
+    b = int(input("Throttle ADC y-direction (0-4095): "))
+    return b
+
+
+def joystick_to_throttle(param_y):
+    """
+    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
+
+    Output: a dshot throttle value 
+    """
+
+    min_throttle = 48
+    max_throttle = 300
+    normalize = (max_throttle - min_throttle) / 4095
+
+    return int(
+        min_throttle +
+        param_y * normalize
+    )
+
+def joystick_to_yaw(param_x):
+    """
+    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
+
+    Output: a dshot throttle value 
+    """
+
+    min_yaw = 48
+    max_yaw = 300
+    normalize = (max_yaw - min_yaw) / 4095
+
+    return int(
+        min_yaw +
+        param_x * normalize
+    )
+
+def joystick_to_roll(param_a):
+    """
+    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
+
+    Output: a dshot throttle value 
+    """
+
+    min_roll = 48
+    max_roll = 300
+    normalize = (max_roll - min_roll) / 4095
+
+    return int(
+        min_roll +
+        param_a * normalize
+    )
+
+def joystick_to_pitch(param_b):
+    """
+    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
+
+    Output: a dshot throttle value 
+    """
+
+    min_pitch = 48
+    max_pitch = 300
+    normalize = (max_pitch - min_pitch) / 4095
+
+    return int(
+        min_pitch +
+        param_b * normalize
+    )
+#################################################################################################
+
+
+def main():
+    """
+    Entry point for ESC initialization and motor testing.
+
+    This function performs the following steps:
+
+        1. Initializes all DShot state machines.
+        2. Starts a periodic 1 kHz transmission timer.
+        3. Activates all PIO state machines simultaneously.
+        4. Arms connected ESCs at zero throttle.
+        5. Gradually ramps throttle for testing.
+        6. Returns motors to zero throttle.
+
+    The continuous timer-based DShot transmission ensures ESCs
+    remain armed even while the main application performs other
+    operations.
+
+    Raises:
+        KeyboardInterrupt:
+            Triggers an emergency stop sequence when execution
+            is interrupted by the user.
+    """
+
+    global motor1, motor2, motor3, motor4
+    motor1, motor2, motor3, motor4 = 0, 0, 0, 0 
+
+    ##### Initialize Timer ####
+    dshot_timer = machine.Timer()
+
+    # state machines ready to work 
+    setup_dshot_sm()
+    
+    # initialize 1kHz dshot timer to synchronize each packet 
+    dshot_timer.init(freq=1000, 
+                     mode = machine.Timer.PERIODIC,
+                     callback=_dshot_ticker)
+
+    # activate all state machines at once 
+    machine.mem32[0x50200000] = 0b1111
+
+    #####################################
+    ### Arm the ESCs  ###
+    # Uses the state machine, then dshot()  
+    # for sending pulses to ESC         
+    #####################################
+
+    print("Arming ESC for 2 seconds")
+    try:
+        for _ in range(200):
+            dshot_throttle = 0 # test for 200 milliseconds = 2 seconds 
+            time.sleep_ms(10) # 1s delay
+
+        print("Armed: ")
+
+        print("------------------------------")
+        
+        repeat_counter = 48
+        MAX_THROTTLE = 200
+        STEP_SIZE = 1
+        while (repeat_counter < MAX_THROTTLE):
+            
+            throttle_percent = ((repeat_counter - 48) / (2047 - 48)) * 100
+            print(f"Incrementing throttle: {throttle_percent} % ")
+            # send_dshot(repeat_counter)
+            motor1, motor2, motor3, motor4 = repeat_counter, repeat_counter, repeat_counter, repeat_counter
+            time.sleep_ms(50)
+            
+            repeat_counter += STEP_SIZE 
+
+        print("------------------------------")
+
+        while True: 
+            # Simulation 1: throttle test - all motors phase locked -> SUCCESS 
+            input_where_roll = str(input("Pitch Up or Down: \n Enter U or D: "))
+            SM0_TXFIFO = 0x50200010  # Motor on SM0 (GPIO 6)
+            SM1_TXFIFO = 0x50200014  # Motor on SM1 (GPIO 5)
+            SM2_TXFIFO = 0x50200018  # Motor on SM2 (GPIO 4)
+            SM3_TXFIFO = 0x5020001c  # Motor on SM3 (GPIO 3)
+            if input_where_roll == "U":
+                # turn off motors 2 and 3
+                motor2 = 47
+                motor3 = 47
+                input_pitch = receive_joystick_sim_pitch()
+                motor1, motor4 = joystick_to_pitch(input_pitch), joystick_to_pitch(input_pitch)
+            elif input_where_roll == "D":
+                # turn off motors 1 and 4
+                motor1 = 47
+                motor4 = 47
+                input_pitch = receive_joystick_sim_pitch()
+                motor2, motor3= joystick_to_pitch(input_pitch), joystick_to_pitch(input_pitch)
+            else:
+                machine.mem32[0x50200000] = 0b0000
+            
+            # Simulation 2: yaw test - diagonal motors turn on and others off slightly -> SUCCESS 
+
+            # Simulation 3: roll test - side motors turn on and others off slightly 
+
+            # Simulation 4: pitch test - front and rear motors turn on and off slightly 
+
+            # Once simulation is done succesfully, move on to hover and stability test 
+        
+        # Bring them down safely
+        print("Ramp complete.")
+        # for _ in range(100):
+        #     send_dshot(0)
+        #     time.sleep_ms(10)
+
+    except KeyboardInterrupt:
+        print("\n!!!EMERGENCY STOP!!!")
+
+if __name__  == '__main__' :
+    main()
 

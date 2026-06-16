@@ -1,12 +1,22 @@
-# Author: Bekhruz Malikov
+"""
+RP2040 Drone Control Stack
+
+- DShot ESC motor driver
+- Joystick input simulation + VLA (future)
+- Motor mixing logic 
+
+Designed for transition into autonomous VLA control.
+
+Author: Bekhruz Malikov
+Stanford University, EE Class of 2027
+Platform: RP2040
+"""
+
 import rp2
 from rp2 import DMA
 import machine
 from machine import Pin, mem32
 import time
-
-machine.freq(120_000_000) # downclock MCU by 5 MHz (125 MHz) 
-MOTOR_PINS = [6, 5, 4, 3] # GPIO on PicoW
 
 ################################################################
 ### @rp2.asm_pio(...) takes the Python function defined,
@@ -67,250 +77,144 @@ def dshot():
     nop().side(0) [1]
 
 
-def make_packet(throttle, telemetry=False):
-    """
-    Construct a valid 16-bit DShot packet.
-
-    The packet format is:
-
-        [11-bit throttle][1-bit telemetry][4-bit CRC]
-
-    The CRC is calculated using the standard DShot checksum algorithm
-    and is used by the ESC to detect transmission errors.
-
-    Args:
-        throttle (int):
-            Throttle value in the DShot range (typically 0-2047).
-
-        telemetry (bool, optional):
-            Whether to request telemetry data from the ESC.
-            Defaults to False.
-
-    Returns:
-        int:
-            Complete 16-bit DShot packet containing throttle,
-            telemetry flag, and CRC checksum.
-    """
-    packet = (throttle << 1) | (1 if telemetry else 0) # shift left by 1 to make space for telemetry flag bit
-    crc = ((packet ^ (packet >> 4) ^ (packet >> 8))) & 0x0F # unique fingerprint; 0x0F = 15 
-    return (packet << 4) | crc # make room for crc bits 
-
-
-####
-# may need FGPA to handle the parallel latency bottleneck 
-####
-def send_dshot(motor1, motor2, motor3, motor4):
-
-    # physical addresses of state machines transmitter FIFOs on Pico Chip 
-    # Sequential 32-bit hardware slots inside the RP2040 chip
-    SM0_TXFIFO = 0x50200010  # Motor on SM0 (GPIO 6)
-    SM1_TXFIFO = 0x50200014  # Motor on SM1 (GPIO 5)
-    SM2_TXFIFO = 0x50200018  # Motor on SM2 (GPIO 4)
-    SM3_TXFIFO = 0x5020001c  # Motor on SM3 (GPIO 3)
-    
-    # make the dshot packet and send it simultenously to selected motors 
-    # packet = make_packet(throttle)
-    # dshot_packet = packet << 16 # shift 16 bits left from 32 to be read by sm
-    mem32[SM0_TXFIFO] = make_packet(motor1) << 16
-    mem32[SM1_TXFIFO] = make_packet(motor2) << 16
-    mem32[SM2_TXFIFO] = make_packet(motor3) << 16 
-    mem32[SM3_TXFIFO] = make_packet(motor4) << 16
-
-
-def _dshot_ticker(timer):
-    """
-    Periodic timer callback used to maintain continuous DShot output.
-
-    This function is invoked by a hardware timer and repeatedly
-    transmits the current global throttle value. Continuous packet
-    transmission is required to keep many ESCs armed and responsive.
-
-    Args:
-        timer (machine.Timer):
-            Timer instance that triggered the callback.
-    """
-    send_dshot(motor1, motor2, motor3, motor4)
-
-def setup_dshot_sm():
-    """
-    Initialize and reset all DShot PIO state machines.
-
-    Creates four state machines, one per motor output pin, and
-    configures each to execute the DShot PIO program at the
-    selected DShot clock frequency.
-
-    Returns:
-        None
-
-    Notes:
-        - State machine 0 controls GPIO 6.
-        - State machine 1 controls GPIO 5.
-        - State machine 2 controls GPIO 4.
-        - State machine 3 controls GPIO 3.
-        - A frequency of 4.8 MHz corresponds to DShot600 timing.
+class DShotESCDriver:
     """
 
-    # 8 cycles per bit @ 4.8 MHz = DShot600 (1.67 microseconds per bit)
-    # 8 cycles per bit @ 2.4 MHz = DShot300 (3.33 microseconds per bit)
-    DSHOT_FREQUENCY = 4_800_000  
-    state_machines = [
-        rp2.StateMachine(
-            0, # 0th state machine 
-            dshot, # the sequence of actions to run
-            freq=DSHOT_FREQUENCY, 
-            sideset_base=Pin(MOTOR_PINS[0])), 
-        rp2.StateMachine(
-            1, 
-            dshot,
-            freq=DSHOT_FREQUENCY,
-            sideset_base=Pin(MOTOR_PINS[1])), 
-        rp2.StateMachine(
-            2, 
-            dshot,
-            freq=DSHOT_FREQUENCY,
-            sideset_base=Pin(MOTOR_PINS[2])), 
-        rp2.StateMachine(
-            3,
-            dshot,
-            freq=DSHOT_FREQUENCY,
-            sideset_base=Pin(MOTOR_PINS[3]))
+    """
+    SM_ADDRESS = [
+            0x50200010, # Motor on SM0 (GPIO 6)
+            0x50200014, # Motor on SM1 (GPIO 5)
+            0x50200018, # Motor on SM2 (GPIO 4)
+            0x5020001c # Motor on SM3 (GPIO 3) 
         ]
-    # reset state machines to ensure no packets are sent to ESCs yet 
-    for sm in state_machines:
-            sm.restart()
+    
+    machine.freq(120_000_000) # downclock MCU by 5 MHz (125 MHz) 
 
-############
-# RECEIVER 
-# SIMULATION
-############
-#################################################################################################
+    MOTOR_PINS = [6, 5, 4, 3] # GPIO on PicoW
 
-def receive_joystick_sim_throttle():
-    """
-    Simulated joystick receiver.
-    Type ADC values manually in serial input.
+    def __init__(self):
+        """
 
-    Simulation: (vision: hand points up and down)
-    throttle up - y1(+)
-    throttle down - y1(-)
+        """
+        self.throttles = [0, 0, 0, 0] # current throttle 
+        self.timer = machine.Timer()
+        self.state_machines = []
+        self.setup_dshot_sm()
 
-    Format:
-    y
-    """
-    y = int(input("Throttle ADC y-direction (0-4095): "))
-    return y
+    def update_throttles(self, motor1, motor2, motor3, motor4):
+        """
+        Thread-safe update of current target throttles
+        """
+        self.throttles[0] = motor1
+        self.throttles[1] = motor2
+        self.throttles[2] = motor3
+        self.throttles[3] = motor4
+        
+    def make_packet(self, throttle, telemetry=False):
+        """
+        Construct a valid 16-bit DShot packet.
 
-def receive_joystick_sim_yaw():
-    """
-    Simulated joystick receiver.
-    Type ADC values manually in serial input.
+        The packet format is:
 
-    Simulation: (vision: hands rotate along x-axis)
-    yaw right - x1(+)
-    yaw left - x1(-)
+            [11-bit throttle][1-bit telemetry][4-bit CRC]
 
-    Format:
-    x
-    """
-    x = int(input("Throttle ADC y-direction (0-4095): "))
-    return x
+        The CRC is calculated using the standard DShot checksum algorithm
+        and is used by the ESC to detect transmission errors.
 
-def receive_joystick_sim_roll():
-    """
-    Simulated joystick receiver.
-    Type ADC values manually in serial input.
+        Args:
+            throttle (int):
+                Throttle value in the DShot range (typically 0-2047).
 
-    Simulation: (vision: hands rotate along x-axis)
-    roll right - a1(+)
-    roll left - a1(-)
+            telemetry (bool, optional):
+                Whether to request telemetry data from the ESC.
+                Defaults to False.
 
-    Format:
-    a
-    """
-    a = int(input("Throttle ADC y-direction (0-4095): "))
-    return a
-
-def receive_joystick_sim_pitch():
-    """
-    Simulated joystick receiver.
-    Type ADC values manually in serial input.
-
-    Simulation: (vision: hands rotate along x-axis)
-    pitch up - b1(+)
-    pitch down - b1(-)
-
-    Format:
-    b
-    """
-    b = int(input("Throttle ADC y-direction (0-4095): "))
-    return b
+        Returns:
+            int:
+                Complete 16-bit DShot packet containing throttle,
+                telemetry flag, and CRC checksum.
+        """
+        packet = (throttle << 1) | (1 if telemetry else 0) # shift left by 1 to make space for telemetry flag bit
+        crc = ((packet ^ (packet >> 4) ^ (packet >> 8))) & 0x0F # unique fingerprint; 0x0F = 15 
+        return (packet << 4) | crc # make room for crc bits 
 
 
-def joystick_to_throttle(param_y):
-    """
-    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
+    def send_dshot(self):
+        """
+        Pushes current throttles to the hardware state machine FIFOs via mem32
+        """
+        # make the dshot packet and send it simultenously to selected motors 
+        # packet = make_packet(throttle)
+        # dshot_packet = packet << 16 # shift 16 bits left from 32 to be read by sm
+        mem32[self.SM_ADDRESS[0]] = self.make_packet(self.throttles[0]) << 16
+        mem32[self.SM_ADDRESS[1]] = self.make_packet(self.throttles[1]) << 16
+        mem32[self.SM_ADDRESS[2]] = self.make_packet(self.throttles[2]) << 16 
+        mem32[self.SM_ADDRESS[3]] = self.make_packet(self.throttles[3]) << 16
 
-    Output: a dshot throttle value 
-    """
+    def dshot_ticker_callback(self, timer):
+        """
+        Periodic hardware timer callback (Runs at 1kHz)
 
-    min_throttle = 48
-    max_throttle = 300
-    normalize = (max_throttle - min_throttle) / 4095
+        This function is invoked by a hardware timer and repeatedly
+        transmits the current global throttle value. Continuous packet
+        transmission is required to keep many ESCs armed and responsive.
 
-    return int(
-        min_throttle +
-        param_y * normalize
-    )
+        Args:
+            timer (machine.Timer):
+                Timer instance that triggered the callback.
+        """
+        self.send_dshot()
 
-def joystick_to_yaw(param_x):
-    """
-    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
+    def setup_dshot_sm(self):
+        """
+        Initialize and reset all DShot PIO state machines.
 
-    Output: a dshot throttle value 
-    """
+        Creates four state machines, one per motor output pin, and
+        configures each to execute the DShot PIO program at the
+        selected DShot clock frequency.
 
-    min_yaw = 48
-    max_yaw = 300
-    normalize = (max_yaw - min_yaw) / 4095
+        Returns:
+            None
 
-    return int(
-        min_yaw +
-        param_x * normalize
-    )
+        Notes:
+            - State machine 0 controls GPIO 6.
+            - State machine 1 controls GPIO 5.
+            - State machine 2 controls GPIO 4.
+            - State machine 3 controls GPIO 3.
+            - A frequency of 4.8 MHz corresponds to DShot600 timing.
+        """
 
-def joystick_to_roll(param_a):
-    """
-    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
+        # 8 cycles per bit @ 4.8 MHz = DShot600 (1.67 microseconds per bit)
+        # 8 cycles per bit @ 2.4 MHz = DShot300 (3.33 microseconds per bit)
+        DSHOT_FREQUENCY = 4_800_000  
+        state_machines = [
+            rp2.StateMachine(
+                0, # 0th state machine 
+                dshot, # the sequence of actions to run
+                freq=DSHOT_FREQUENCY, 
+                sideset_base=Pin(self.MOTOR_PINS[0])), 
+            rp2.StateMachine(
+                1, 
+                dshot,
+                freq=DSHOT_FREQUENCY,
+                sideset_base=Pin(self.MOTOR_PINS[1])), 
+            rp2.StateMachine(
+                2, 
+                dshot,
+                freq=DSHOT_FREQUENCY,
+                sideset_base=Pin(self.MOTOR_PINS[2])), 
+            rp2.StateMachine(
+                3,
+                dshot,
+                freq=DSHOT_FREQUENCY,
+                sideset_base=Pin(self.MOTOR_PINS[3]))
+            ]
+        # reset state machines to ensure no packets are sent to ESCs yet 
+        for sm in state_machines:
+                sm.restart()
 
-    Output: a dshot throttle value 
-    """
-
-    min_roll = 48
-    max_roll = 300
-    normalize = (max_roll - min_roll) / 4095
-
-    return int(
-        min_roll +
-        param_a * normalize
-    )
-
-def joystick_to_pitch(param_b):
-    """
-    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
-
-    Output: a dshot throttle value 
-    """
-
-    min_pitch = 48
-    max_pitch = 300
-    normalize = (max_pitch - min_pitch) / 4095
-
-    return int(
-        min_pitch +
-        param_b * normalize
-    )
-#################################################################################################
-
+        # activate all state machines at once 
+        machine.mem32[0x50200000] = 0b1111
 
 def main():
     """
@@ -335,22 +239,16 @@ def main():
             is interrupted by the user.
     """
 
-    global motor1, motor2, motor3, motor4
-    motor1, motor2, motor3, motor4 = 0, 0, 0, 0 
+    print("Initiliazing Dshot ESC Driver: ")
+    driver = DShotESCDriver() # automatically calls the state machines member
 
     ##### Initialize Timer ####
     dshot_timer = machine.Timer()
 
-    # state machines ready to work 
-    setup_dshot_sm()
-    
     # initialize 1kHz dshot timer to synchronize each packet 
     dshot_timer.init(freq=1000, 
-                     mode = machine.Timer.PERIODIC,
-                     callback=_dshot_ticker)
-
-    # activate all state machines at once 
-    machine.mem32[0x50200000] = 0b1111
+                    mode = machine.Timer.PERIODIC,
+                    callback=driver.dshot_ticker_callback)
 
     #####################################
     ### Arm the ESCs  ###
@@ -361,7 +259,7 @@ def main():
     print("Arming ESC for 2 seconds")
     try:
         for _ in range(200):
-            dshot_throttle = 0 # test for 200 milliseconds = 2 seconds 
+            driver.update_throttles(0, 0, 0, 0)# test for 200 milliseconds = 2 seconds 
             time.sleep_ms(10) # 1s delay
 
         print("Armed: ")
@@ -376,42 +274,12 @@ def main():
             throttle_percent = ((repeat_counter - 48) / (2047 - 48)) * 100
             print(f"Incrementing throttle: {throttle_percent} % ")
             # send_dshot(repeat_counter)
-            motor1, motor2, motor3, motor4 = repeat_counter, repeat_counter, repeat_counter, repeat_counter
+            driver.update_throttles(repeat_counter, repeat_counter, repeat_counter, repeat_counter)
             time.sleep_ms(50)
             
             repeat_counter += STEP_SIZE 
 
         print("------------------------------")
-
-        while True: 
-            # Simulation 1: throttle test - all motors phase locked -> SUCCESS 
-            input_where_roll = str(input("Pitch Up or Down: \n Enter U or D: "))
-            SM0_TXFIFO = 0x50200010  # Motor on SM0 (GPIO 6)
-            SM1_TXFIFO = 0x50200014  # Motor on SM1 (GPIO 5)
-            SM2_TXFIFO = 0x50200018  # Motor on SM2 (GPIO 4)
-            SM3_TXFIFO = 0x5020001c  # Motor on SM3 (GPIO 3)
-            if input_where_roll == "U":
-                # turn off motors 2 and 3
-                motor2 = 47
-                motor3 = 47
-                input_pitch = receive_joystick_sim_pitch()
-                motor1, motor4 = joystick_to_pitch(input_pitch), joystick_to_pitch(input_pitch)
-            elif input_where_roll == "D":
-                # turn off motors 1 and 4
-                motor1 = 47
-                motor4 = 47
-                input_pitch = receive_joystick_sim_pitch()
-                motor2, motor3= joystick_to_pitch(input_pitch), joystick_to_pitch(input_pitch)
-            else:
-                machine.mem32[0x50200000] = 0b0000
-            
-            # Simulation 2: yaw test - diagonal motors turn on and others off slightly -> SUCCESS 
-
-            # Simulation 3: roll test - side motors turn on and others off slightly 
-
-            # Simulation 4: pitch test - front and rear motors turn on and off slightly 
-
-            # Once simulation is done succesfully, move on to hover and stability test 
         
         # Bring them down safely
         print("Ramp complete.")
