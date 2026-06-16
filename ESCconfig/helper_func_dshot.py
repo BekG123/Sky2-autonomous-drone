@@ -54,6 +54,7 @@ def plot_ESC_waveform(packet):
     cycles_per_bit = 5 
     cycles = 83
 
+
     time_axis = []
     for i in range(len(packet)):
         # divide x-axis into microsecond timings

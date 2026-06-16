@@ -99,7 +99,7 @@ def make_packet(throttle, telemetry=False):
 ####
 # may need FGPA to handle the parallel latency bottleneck 
 ####
-def send_dshot(throttle):
+def send_dshot(motor1, motor2, motor3, motor4):
 
     # physical addresses of state machines transmitter FIFOs on Pico Chip 
     # Sequential 32-bit hardware slots inside the RP2040 chip
@@ -109,12 +109,12 @@ def send_dshot(throttle):
     SM3_TXFIFO = 0x5020001c  # Motor on SM3 (GPIO 3)
     
     # make the dshot packet and send it simultenously to selected motors 
-    packet = make_packet(throttle)
-    dshot_packet = packet << 16 # shift 16 bits left from 32 to be read by sm
-    mem32[SM0_TXFIFO] = dshot_packet 
-    mem32[SM1_TXFIFO] = dshot_packet 
-    mem32[SM2_TXFIFO] = dshot_packet 
-    mem32[SM3_TXFIFO] = dshot_packet
+    # packet = make_packet(throttle)
+    # dshot_packet = packet << 16 # shift 16 bits left from 32 to be read by sm
+    mem32[SM0_TXFIFO] = make_packet(motor1) << 16
+    mem32[SM1_TXFIFO] = make_packet(motor2) << 16
+    mem32[SM2_TXFIFO] = make_packet(motor3) << 16 
+    mem32[SM3_TXFIFO] = make_packet(motor4) << 16
 
 
 def _dshot_ticker(timer):
@@ -129,7 +129,7 @@ def _dshot_ticker(timer):
         timer (machine.Timer):
             Timer instance that triggered the callback.
     """
-    send_dshot(dshot_throttle)
+    send_dshot(motor1, motor2, motor3, motor4)
 
 def setup_dshot_sm():
     """
@@ -185,12 +185,12 @@ def setup_dshot_sm():
 ############
 #################################################################################################
 
-def receive_joystick_sim():
+def receive_joystick_sim_throttle():
     """
     Simulated joystick receiver.
     Type ADC values manually in serial input.
 
-    Simulation:
+    Simulation: (vision: hand points up and down)
     throttle up - y1(+)
     throttle down - y1(-)
 
@@ -200,8 +200,53 @@ def receive_joystick_sim():
     y = int(input("Throttle ADC y-direction (0-4095): "))
     return y
 
+def receive_joystick_sim_yaw():
+    """
+    Simulated joystick receiver.
+    Type ADC values manually in serial input.
 
-def joystick_to_throttle(y):
+    Simulation: (vision: hands rotate along x-axis)
+    yaw right - x1(+)
+    yaw left - x1(-)
+
+    Format:
+    x
+    """
+    x = int(input("Throttle ADC y-direction (0-4095): "))
+    return x
+
+def receive_joystick_sim_roll():
+    """
+    Simulated joystick receiver.
+    Type ADC values manually in serial input.
+
+    Simulation: (vision: hands rotate along x-axis)
+    roll right - a1(+)
+    roll left - a1(-)
+
+    Format:
+    a
+    """
+    a = int(input("Throttle ADC y-direction (0-4095): "))
+    return a
+
+def receive_joystick_sim_pitch():
+    """
+    Simulated joystick receiver.
+    Type ADC values manually in serial input.
+
+    Simulation: (vision: hands rotate along x-axis)
+    pitch up - b1(+)
+    pitch down - b1(-)
+
+    Format:
+    b
+    """
+    b = int(input("Throttle ADC y-direction (0-4095): "))
+    return b
+
+
+def joystick_to_throttle(param_y):
     """
     Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
 
@@ -214,10 +259,56 @@ def joystick_to_throttle(y):
 
     return int(
         min_throttle +
-        y * normalize
+        param_y * normalize
     )
 
+def joystick_to_yaw(param_x):
+    """
+    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
 
+    Output: a dshot throttle value 
+    """
+
+    min_yaw = 48
+    max_yaw = 300
+    normalize = (max_yaw - min_yaw) / 4095
+
+    return int(
+        min_yaw +
+        param_x * normalize
+    )
+
+def joystick_to_roll(param_a):
+    """
+    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
+
+    Output: a dshot throttle value 
+    """
+
+    min_roll = 48
+    max_roll = 300
+    normalize = (max_roll - min_roll) / 4095
+
+    return int(
+        min_roll +
+        param_a * normalize
+    )
+
+def joystick_to_pitch(param_b):
+    """
+    Convert joystick ADC (0–4095) → ESC throttle (48–300 safe range)
+
+    Output: a dshot throttle value 
+    """
+
+    min_pitch = 48
+    max_pitch = 300
+    normalize = (max_pitch - min_pitch) / 4095
+
+    return int(
+        min_pitch +
+        param_b * normalize
+    )
 #################################################################################################
 
 
@@ -244,8 +335,8 @@ def main():
             is interrupted by the user.
     """
 
-    global dshot_throttle
-    dshot_throttle = 0
+    global motor1, motor2, motor3, motor4
+    motor1, motor2, motor3, motor4 = 0, 0, 0, 0 
 
     ##### Initialize Timer ####
     dshot_timer = machine.Timer()
@@ -285,7 +376,7 @@ def main():
             throttle_percent = ((repeat_counter - 48) / (2047 - 48)) * 100
             print(f"Incrementing throttle: {throttle_percent} % ")
             # send_dshot(repeat_counter)
-            dshot_throttle = repeat_counter
+            motor1, motor2, motor3, motor4 = repeat_counter, repeat_counter, repeat_counter, repeat_counter
             time.sleep_ms(50)
             
             repeat_counter += STEP_SIZE 
@@ -294,10 +385,27 @@ def main():
 
         while True: 
             # Simulation 1: throttle test - all motors phase locked -> SUCCESS 
-            input = receive_joystick_sim()
-            dshot_throttle = joystick_to_throttle(input)
+            input_where_roll = str(input("Pitch Up or Down: \n Enter U or D: "))
+            SM0_TXFIFO = 0x50200010  # Motor on SM0 (GPIO 6)
+            SM1_TXFIFO = 0x50200014  # Motor on SM1 (GPIO 5)
+            SM2_TXFIFO = 0x50200018  # Motor on SM2 (GPIO 4)
+            SM3_TXFIFO = 0x5020001c  # Motor on SM3 (GPIO 3)
+            if input_where_roll == "U":
+                # turn off motors 2 and 3
+                motor2 = 47
+                motor3 = 47
+                input_pitch = receive_joystick_sim_pitch()
+                motor1, motor4 = joystick_to_pitch(input_pitch), joystick_to_pitch(input_pitch)
+            elif input_where_roll == "D":
+                # turn off motors 1 and 4
+                motor1 = 47
+                motor4 = 47
+                input_pitch = receive_joystick_sim_pitch()
+                motor2, motor3= joystick_to_pitch(input_pitch), joystick_to_pitch(input_pitch)
+            else:
+                machine.mem32[0x50200000] = 0b0000
             
-            # Simulation 2: yaw test - diagonal motors turn on and others off slightly
+            # Simulation 2: yaw test - diagonal motors turn on and others off slightly -> SUCCESS 
 
             # Simulation 3: roll test - side motors turn on and others off slightly 
 
